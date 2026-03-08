@@ -1,0 +1,301 @@
+---
+title: pyrig mktests
+description: Generate test skeleton files for all source code
+---
+
+## Overview
+
+The `mktests` command creates test files mirroring the source package structure. For each module, class, function, and method in the source code, it generates corresponding test skeletons with `NotImplementedError` placeholders.
+
+```bash
+uv run pyrig mktests
+```
+
+## What It Does
+
+The command:
+
+1. **Scans** your source package for all modules, classes, functions, and methods
+2. **Generates** test files mirroring the source structure in the `tests/` directory
+3. **Creates** test skeletons with proper naming conventions
+4. **Adds** placeholders with `NotImplementedError` for unimplemented tests
+5. **Preserves** existing tests - only adds new skeletons for untested code
+6. **Uses parallel execution** for performance on large codebases
+
+<Note>
+  The command is **idempotent** and **non-destructive**: safe to run multiple times, only adds new test skeletons, preserves all existing tests.
+</Note>
+
+## Naming Conventions
+
+The generated tests follow strict naming patterns:
+
+<ParamField path="Test Modules" type="pattern">
+  `test_<module_name>.py`
+  
+  ```
+  src/myproject/utils.py → tests/test_utils.py
+  ```
+</ParamField>
+
+<ParamField path="Test Classes" type="pattern">
+  `Test<ClassName>`
+  
+  ```python
+  class Calculator:  → class TestCalculator:
+  ```
+</ParamField>
+
+<ParamField path="Test Functions" type="pattern">
+  `test_<function_name>`
+  
+  ```python
+  def add(a, b):  → def test_add():
+  ```
+</ParamField>
+
+<ParamField path="Test Methods" type="pattern">
+  `test_<method_name>`
+  
+  ```python
+  def calculate():  → def test_calculate():
+  ```
+</ParamField>
+
+## Usage
+
+### Basic Usage
+
+```bash
+uv run pyrig mktests
+```
+
+### After Adding New Code
+
+```bash
+# 1. Add new modules/functions to your source code
+# 2. Generate test skeletons
+uv run pyrig mktests
+
+# 3. Implement the tests
+# Edit tests/test_<module>.py and replace NotImplementedError
+```
+
+### With Verbose Output
+
+```bash
+# See which test files are being created
+uv run pyrig -v mktests
+
+# See detailed module scanning
+uv run pyrig -vv mktests
+```
+
+### Quiet Mode
+
+```bash
+# Only show warnings and errors
+uv run pyrig -q mktests
+```
+
+## Generated Test Structure
+
+Given this source code:
+
+```python
+# src/myproject/calculator.py
+class Calculator:
+    """A simple calculator."""
+    
+    def add(self, a: int, b: int) -> int:
+        """Add two numbers."""
+        return a + b
+    
+    def subtract(self, a: int, b: int) -> int:
+        """Subtract two numbers."""
+        return a - b
+
+def multiply(a: int, b: int) -> int:
+    """Multiply two numbers."""
+    return a * b
+```
+
+The command generates:
+
+```python
+# tests/test_calculator.py
+"""Tests for myproject.calculator module."""
+
+import pytest
+from myproject.calculator import Calculator, multiply
+
+
+class TestCalculator:
+    """Tests for Calculator class."""
+    
+    def test_add(self) -> None:
+        """Test Calculator.add method."""
+        raise NotImplementedError
+    
+    def test_subtract(self) -> None:
+        """Test Calculator.subtract method."""
+        raise NotImplementedError
+
+
+def test_multiply() -> None:
+    """Test multiply function."""
+    raise NotImplementedError
+```
+
+## Expected Output
+
+```bash
+$ uv run pyrig mktests
+Scanning source package...
+Found 12 modules
+Generating test skeletons...
+✓ Created 5 new test files
+✓ Added 23 new test functions
+✓ Preserved 47 existing tests
+```
+
+```bash
+$ uv run pyrig -v mktests
+DEBUG: Scanning myproject package
+DEBUG: Found module: myproject.calculator
+DEBUG: Found module: myproject.utils
+INFO: Generating tests/test_calculator.py
+DEBUG: Added test_add for Calculator.add
+DEBUG: Added test_subtract for Calculator.subtract
+DEBUG: Added test_multiply for multiply function
+...
+✓ Created 5 new test files
+```
+
+## Behavior
+
+<ParamField path="Discovery" type="automatic">
+  Automatically discovers all modules in your source package by scanning the package directory.
+</ParamField>
+
+<ParamField path="Mirroring" type="exact">
+  Test structure exactly mirrors source structure:
+  ```
+  src/myproject/
+  ├── utils.py
+  └── models/
+      ├── user.py
+      └── post.py
+  
+  tests/
+  ├── test_utils.py
+  └── models/
+      ├── test_user.py
+      └── test_post.py
+  ```
+</ParamField>
+
+<ParamField path="Preservation" type="guaranteed">
+  - **Never overwrites** existing test functions
+  - **Only adds** new test skeletons for untested code
+  - **Preserves** all manual test implementations
+</ParamField>
+
+<ParamField path="Performance" type="parallel">
+  Uses parallel execution (ThreadPoolExecutor) for fast generation on large codebases.
+</ParamField>
+
+<ParamField path="Placeholders" type="NotImplementedError">
+  Generated test functions raise `NotImplementedError` to ensure they must be implemented before passing.
+</ParamField>
+
+## When to Use
+
+### Use `mktests` When:
+
+- You've added new modules, classes, or functions
+- Starting a new project and need initial test structure
+- Ensuring test coverage completeness
+- You want to enforce test-driven development
+- Auditing which code lacks tests
+
+### Example Workflow
+
+<Steps>
+  <Step title="Add new source code">
+    Create a new module or add functions to existing modules.
+  </Step>
+  
+  <Step title="Generate test skeletons">
+    ```bash
+    uv run pyrig mktests
+    ```
+  </Step>
+  
+  <Step title="Implement the tests">
+    Edit the generated test files and replace `NotImplementedError` with actual test logic.
+  </Step>
+  
+  <Step title="Run tests">
+    ```bash
+    uv run pytest
+    ```
+  </Step>
+</Steps>
+
+## Test Docstrings
+
+Generated tests include minimal docstrings:
+
+```python
+def test_add() -> None:
+    """Test add function."""
+    raise NotImplementedError
+```
+
+You can expand these docstrings when implementing tests:
+
+```python
+def test_add() -> None:
+    """Test add function.
+    
+    Ensures that adding two positive integers returns
+    the correct sum.
+    """
+    result = add(2, 3)
+    assert result == 5
+```
+
+## Excluding Test Generation
+
+To skip test generation for specific code, use naming conventions:
+
+- **Private functions/methods**: Start with `_` (not tested by default)
+- **Internal modules**: Mark as internal in module docstring
+
+```python
+# Won't generate tests
+def _internal_helper():
+    pass
+
+class MyClass:
+    def _private_method(self):
+        pass
+```
+
+<Warning>
+  Generated test functions with `NotImplementedError` will **fail** when run with pytest until implemented. This is intentional to ensure test coverage.
+</Warning>
+
+## Related Commands
+
+- **[init](/cli/commands/init)** - Full project initialization (includes `mktests`)
+- **[mkinits](/cli/commands/mkinits)** - Create missing `__init__.py` files
+
+## Implementation
+
+The `mktests` command calls `MirrorTestConfigFile.I.create_all_test_modules()`, which discovers all source modules and creates test skeletons. See `pyrig/rig/cli/commands/create_tests.py:11`.
+
+<Note>
+  Run `uv run pyrig mktests --help` to see the command's built-in help text.
+</Note>

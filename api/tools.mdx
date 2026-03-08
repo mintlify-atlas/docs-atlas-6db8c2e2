@@ -1,0 +1,502 @@
+---
+title: Tools API
+description: Type-safe command-line tool wrappers for development workflows
+---
+
+The Tools API provides type-safe, composable wrappers for CLI tools used in development workflows. Tools construct command arguments that can be tested without execution and provide automatic badge generation for README files.
+
+## Base Class
+
+### Tool
+
+<ParamField path="pyrig.rig.tools.base.base.Tool" type="class">
+  Abstract base for tool command argument construction.
+  
+  Provides consistent interface for constructing command-line arguments. Subclasses implement `name()`, `group()`, `badge_urls()` and provide `*_args()` methods.
+  
+  **Pattern:**
+  - Each tool method returns `Args` object
+  - Method names indicate command being constructed
+  - Arguments validated at construction
+  - Commands testable without execution
+  
+  **Singleton Access:**
+  ```python
+  # Access via .I property (singleton)
+  PackageManager.I.install_dependencies_args().run()
+  ```
+</ParamField>
+
+## Abstract Methods (Must Implement)
+
+<ParamField path="name" type="() -> str">
+  Get tool command name.
+  
+  **Returns:**
+  Tool command name (e.g., "git", "uv", "pytest").
+  
+  **Example:**
+  ```python
+  def name(self) -> str:
+      return "ruff"
+  ```
+</ParamField>
+
+<ParamField path="group" type="() -> str">
+  Returns the group the tool belongs to.
+  
+  Used for grouping badges in the README.md file.
+  
+  **Returns:**
+  Tool group constant from `ToolGroup`.
+  
+  **Example:**
+  ```python
+  def group(self) -> str:
+      return ToolGroup.CODE_QUALITY
+  ```
+</ParamField>
+
+<ParamField path="badge_urls" type="() -> tuple[str, str]">
+  Returns the URLs for a badge, like found in a README.md file.
+  
+  The first URL is the picture (badge image), and the second is the link where you are led when clicking on the badge.
+  
+  **Returns:**
+  A tuple of two strings that are URLs. Return empty strings if no badge.
+  
+  **Example:**
+  ```python
+  def badge_urls(self) -> tuple[str, str]:
+      return (
+          "https://img.shields.io/badge/ruff-checked-blue",
+          "https://github.com/astral-sh/ruff"
+      )
+  ```
+</ParamField>
+
+## Instance Methods
+
+<ParamField path="args" type="(*args: str) -> Args">
+  Construct command arguments with tool name prepended.
+  
+  **Parameters:**
+  <ParamField path="args" type="str">
+    Command arguments.
+  </ParamField>
+  
+  **Returns:**
+  Args object with tool name and arguments.
+  
+  **Example:**
+  ```python
+  def check_args(self, *args: str) -> Args:
+      return self.args("check", *args)
+  
+  # Usage:
+  Linter.I.check_args("--fix", "src/")
+  # Results in: Args(("ruff", "check", "--fix", "src/"))
+  ```
+</ParamField>
+
+<ParamField path="badge" type="() -> str">
+  Returns the badge string for a markdown file.
+  
+  **Returns:**
+  Markdown badge string combining badge image and link.
+  
+  **Example:**
+  ```python
+  badge = Linter.I.badge()
+  # Returns: [![Linter](badge_url)](page_url)
+  ```
+</ParamField>
+
+<ParamField path="dev_dependencies" type="() -> tuple[str, ...]">
+  Get tool dependencies.
+  
+  **Returns:**
+  Tuple of tool dependencies. Defaults to the name of the tool.
+  
+  **Example:**
+  ```python
+  def dev_dependencies(self) -> tuple[str, ...]:
+      return ("ruff",)
+  
+  # For system tools:
+  def dev_dependencies(self) -> tuple[str, ...]:
+      return ()  # No Python dependencies
+  ```
+</ParamField>
+
+## Class Methods
+
+<ParamField path="grouped_badges" type="classmethod() -> defaultdict[str, list[str]]">
+  Get a dict with all badges of tools grouped by their group.
+  
+  **Returns:**
+  Dictionary mapping group names to lists of badge markdown strings.
+  
+  **Example:**
+  ```python
+  badges = Tool.grouped_badges()
+  # {
+  #   "code-quality": ["[![Ruff](...)](...)", "[![MyPy](...)][...]"],
+  #   "testing": ["[![Pytest](...)](...)"],
+  #   ...
+  # }
+  ```
+</ParamField>
+
+<ParamField path="subclasses_dev_dependencies" type="classmethod() -> list[str]">
+  Get all dev dependencies for all tools.
+  
+  Gets all subclasses of Tool and calls `dev_dependencies()` on them. This way all dependencies for each tool are retrieved.
+  
+  **Returns:**
+  Sorted list of all tool dependencies.
+  
+  **Example:**
+  ```python
+  deps = Tool.subclasses_dev_dependencies()
+  # ["mypy", "pytest", "ruff", ...]
+  ```
+</ParamField>
+
+## Tool Groups
+
+<ParamField path="pyrig.rig.tools.base.base.ToolGroup" type="class">
+  Constants for badge groups.
+  
+  **Constants:**
+  - `CI_CD = "ci/cd"`: CI/CD tools
+  - `CODE_QUALITY = "code-quality"`: Linters, formatters, type checkers
+  - `DOCUMENTATION = "documentation"`: Documentation builders
+  - `PROJECT_INFO = "project-info"`: Project information tools
+  - `SECURITY = "security"`: Security scanners
+  - `TOOLING = "tooling"`: Package managers and build tools
+  - `TESTING = "testing"`: Test frameworks and coverage tools
+  
+  **Example:**
+  ```python
+  from pyrig.rig.tools.base.base import ToolGroup
+  
+  def group(self) -> str:
+      return ToolGroup.CODE_QUALITY
+  ```
+</ParamField>
+
+## Args Type
+
+<ParamField path="pyrig.src.processes.Args" type="class">
+  Tuple subclass for command arguments.
+  
+  **Methods:**
+  - `run(*args, **kwargs) -> CompletedProcess`: Execute the command
+  - `__str__() -> str`: Convert to space-separated string
+  
+  **Example:**
+  ```python
+  from pyrig.src.processes import Args
+  
+  args = Args(("pytest", "-v", "tests/"))
+  print(args)  # "pytest -v tests/"
+  result = args.run()  # Execute command
+  ```
+</ParamField>
+
+## Built-in Tools
+
+### PackageManager
+
+<ParamField path="pyrig.rig.tools.package_manager.PackageManager" type="class">
+  UV package manager wrapper.
+  
+  Constructs uv command arguments for package management operations.
+  
+  **Operations:**
+  - Project setup: init, sync
+  - Dependencies: add, lock --upgrade
+  - Building: build, publish
+  - Versioning: version, version --bump patch
+  - Execution: run, run --no-group dev
+  - Self-maintenance: self update
+  
+  **Example:**
+  ```python
+  from pyrig.rig.tools.package_manager import PackageManager
+  
+  # Install dependencies
+  PackageManager.I.install_dependencies_args().run()
+  
+  # Add dev dependencies
+  PackageManager.I.add_dev_dependencies_args("ruff", "pytest").run()
+  
+  # Build project
+  PackageManager.I.build_args().run()
+  ```
+</ParamField>
+
+#### PackageManager Methods
+
+<ParamField path="project_name" type="() -> str">
+  Get the name of the project from pyproject.toml.
+  
+  **Returns:**
+  Project name (kebab-case).
+</ParamField>
+
+<ParamField path="package_name" type="() -> str">
+  Get the main package of the project.
+  
+  **Returns:**
+  Package name (snake_case conversion of project name).
+</ParamField>
+
+<ParamField path="init_project_args" type="(*args: str) -> Args">
+  Construct uv init arguments.
+  
+  **Returns:**
+  Args for 'uv init'.
+</ParamField>
+
+<ParamField path="run_args" type="(*args: str) -> Args">
+  Construct uv run arguments.
+  
+  **Returns:**
+  Args for 'uv run'.
+</ParamField>
+
+<ParamField path="run_no_dev_args" type="(*args: str) -> Args">
+  Construct uv run arguments without dev dependencies.
+  
+  **Returns:**
+  Args for 'uv run --no-group dev'.
+</ParamField>
+
+<ParamField path="add_dependencies_args" type="(*args: str) -> Args">
+  Construct uv add arguments.
+  
+  **Returns:**
+  Args for 'uv add'.
+</ParamField>
+
+<ParamField path="add_dev_dependencies_args" type="(*args: str) -> Args">
+  Construct uv add arguments for dev dependencies.
+  
+  **Returns:**
+  Args for 'uv add --group dev'.
+</ParamField>
+
+<ParamField path="install_dependencies_args" type="(*args: str) -> Args">
+  Construct uv sync arguments.
+  
+  **Returns:**
+  Args for 'uv sync'.
+</ParamField>
+
+<ParamField path="install_dependencies_no_dev_args" type="(*args: str) -> Args">
+  Construct uv sync arguments without dev dependencies.
+  
+  **Returns:**
+  Args for 'uv sync --no-group dev'.
+</ParamField>
+
+<ParamField path="update_dependencies_args" type="(*args: str) -> Args">
+  Construct uv lock arguments for updating dependencies.
+  
+  **Returns:**
+  Args for 'uv lock --upgrade'.
+</ParamField>
+
+<ParamField path="build_args" type="(*args: str) -> Args">
+  Construct uv build arguments.
+  
+  **Returns:**
+  Args for 'uv build'.
+</ParamField>
+
+<ParamField path="publish_args" type="(*args: str, token: str) -> Args">
+  Construct uv publish arguments with token.
+  
+  **Parameters:**
+  <ParamField path="token" type="str" required>
+    Authentication token (keyword-only).
+  </ParamField>
+  
+  **Returns:**
+  Args for 'uv publish --token `<token>`'.
+</ParamField>
+
+<ParamField path="version_args" type="(*args: str) -> Args">
+  Construct uv version arguments.
+  
+  **Returns:**
+  Args for 'uv version'.
+</ParamField>
+
+<ParamField path="patch_version_args" type="(*args: str) -> Args">
+  Construct uv version arguments for patch bump.
+  
+  **Returns:**
+  Args for 'uv version --bump patch'.
+</ParamField>
+
+### Linter
+
+<ParamField path="pyrig.rig.tools.linter.Linter" type="class">
+  Ruff linter and formatter wrapper.
+  
+  Constructs ruff command arguments for linting and formatting operations.
+  
+  **Operations:**
+  - Linting: Check code for issues
+  - Formatting: Format code to style guidelines
+  - Auto-fix: Automatically fix linting issues
+  
+  **Example:**
+  ```python
+  from pyrig.rig.tools.linter import Linter
+  
+  # Check for issues
+  Linter.I.check_args().run()
+  
+  # Auto-fix issues
+  Linter.I.check_fix_args().run()
+  
+  # Format code
+  Linter.I.format_args().run()
+  ```
+</ParamField>
+
+#### Linter Methods
+
+<ParamField path="check_args" type="(*args: str) -> Args">
+  Construct ruff check arguments.
+  
+  **Returns:**
+  Args for 'ruff check'.
+</ParamField>
+
+<ParamField path="check_fix_args" type="(*args: str) -> Args">
+  Construct ruff check arguments with auto-fix.
+  
+  **Returns:**
+  Args for 'ruff check --fix'.
+</ParamField>
+
+<ParamField path="format_args" type="(*args: str) -> Args">
+  Construct ruff format arguments.
+  
+  **Returns:**
+  Args for 'ruff format'.
+</ParamField>
+
+## Creating Custom Tools
+
+### Basic Tool
+
+```python
+from pyrig.rig.tools.base.base import Tool, ToolGroup
+from pyrig.src.processes import Args
+
+class MyLinter(Tool):
+    """Wrapper for mylinter CLI tool."""
+    
+    def name(self) -> str:
+        return "mylinter"
+    
+    def group(self) -> str:
+        return ToolGroup.CODE_QUALITY
+    
+    def badge_urls(self) -> tuple[str, str]:
+        return (
+            "https://img.shields.io/badge/mylinter-checked-blue",
+            "https://github.com/myorg/mylinter"
+        )
+    
+    def check_args(self, *args: str) -> Args:
+        """Construct check arguments."""
+        return self.args("check", *args)
+    
+    def fix_args(self, *args: str) -> Args:
+        """Construct fix arguments."""
+        return self.args("fix", *args)
+
+# Usage:
+MyLinter.I.check_args("src/").run()
+MyLinter.I.fix_args("--aggressive", "src/").run()
+```
+
+### Tool with Custom Dependencies
+
+```python
+from pyrig.rig.tools.base.base import Tool, ToolGroup
+from pyrig.src.processes import Args
+
+class DocBuilder(Tool):
+    """Wrapper for documentation builder."""
+    
+    def name(self) -> str:
+        return "mkdocs"
+    
+    def group(self) -> str:
+        return ToolGroup.DOCUMENTATION
+    
+    def badge_urls(self) -> tuple[str, str]:
+        return ("", "")  # No badge
+    
+    def dev_dependencies(self) -> tuple[str, ...]:
+        """Include plugins as dependencies."""
+        return (
+            "mkdocs",
+            "mkdocs-material",
+            "mkdocs-awesome-pages-plugin"
+        )
+    
+    def build_args(self, *args: str) -> Args:
+        return self.args("build", *args)
+    
+    def serve_args(self, *args: str) -> Args:
+        return self.args("serve", *args)
+
+# Usage:
+DocBuilder.I.build_args().run()
+DocBuilder.I.serve_args("--dev-addr", "0.0.0.0:8000").run()
+```
+
+### Testing Tool Wrappers
+
+```python
+import pytest
+from myproject.rig.tools.mylinter import MyLinter
+
+def test_check_args():
+    """Test check command construction."""
+    args = MyLinter.I.check_args("src/")
+    assert str(args) == "mylinter check src/"
+    assert args == ("mylinter", "check", "src/")
+
+def test_fix_args():
+    """Test fix command construction."""
+    args = MyLinter.I.fix_args("--aggressive", "src/")
+    assert str(args) == "mylinter fix --aggressive src/"
+    assert args == ("mylinter", "fix", "--aggressive", "src/")
+```
+
+## Best Practices
+
+1. **Use descriptive method names**: Name methods after the command being constructed
+2. **Accept variadic args**: Use `*args: str` to allow flexible argument passing
+3. **Return Args objects**: Always return `Args` from wrapper methods
+4. **Provide badges**: Include badge URLs for README generation
+5. **Specify dependencies**: Override `dev_dependencies()` if tool needs plugins/extensions
+6. **Group appropriately**: Use correct `ToolGroup` constant
+7. **Test without execution**: Test command construction without running commands
+8. **Use singleton access**: Access via `.I` property for convenience
+
+## Related APIs
+
+- [CLI API](/api/cli) - For command-line interface framework
+- [Configuration API](/api/configs) - For managing project configuration files
+- [Builders API](/api/builders) - For creating distributable artifacts

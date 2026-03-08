@@ -1,0 +1,557 @@
+---
+title: Configuration API
+description: Declarative configuration file management with automatic discovery
+---
+
+The Configuration API provides a declarative, idempotent system for managing project configuration files with automatic discovery, intelligent merging, and priority-based validation.
+
+## Base Classes
+
+### ConfigFile
+
+<ParamField path="pyrig.rig.configs.base.base.ConfigFile[ConfigT]" type="class">
+  Abstract base class for declarative configuration file management.
+  
+  Provides automated config management with automatic discovery, subset validation, intelligent merging, priority-based validation, and parallel execution.
+  
+  **Type Parameters:**
+  - `ConfigT`: The configuration type (ConfigDict or ConfigList)
+  
+  **Subclass Requirements (must implement):**
+  - `parent_path()`: Directory containing the file
+  - `extension()`: File extension without leading dot
+  - `_configs()`: Expected configuration structure (internal)
+  - `_load()`: Load and parse the file (internal)
+  - `_dump(config)`: Write configuration to file (internal)
+  
+  **Optionally override:**
+  - `priority()`: Float priority (default 0, higher = first)
+  - `filename()`: Filename without extension (auto-derived from class name)
+  
+  **Public API (already implemented, do not override):**
+  - `configs()`: Cached wrapper around `_configs()`
+  - `load()`: Cached wrapper around `_load()`
+  - `dump(config)`: Cache-invalidating wrapper around `_dump(config)`
+</ParamField>
+
+### Type Definitions
+
+```python
+from typing import Any
+
+# Configuration types
+type ConfigDict = dict[str, Any]
+type ConfigList = list[Any]
+type ConfigData = ConfigDict | ConfigList
+
+ConfigT = TypeVar("ConfigT", bound=ConfigData)
+```
+
+## ConfigFile Methods
+
+### Abstract Methods (Must Implement)
+
+<ParamField path="parent_path" type="() -> Path">
+  Return directory containing the config file.
+  
+  **Returns:**
+  Path to parent directory, relative to project root.
+  
+  **Example:**
+  ```python
+  def parent_path(self) -> Path:
+      return Path()  # Project root
+  
+  def parent_path(self) -> Path:
+      return Path(".github/workflows")  # Subdirectory
+  ```
+</ParamField>
+
+<ParamField path="extension" type="() -> str">
+  Return file extension without leading dot.
+  
+  **Returns:**
+  File extension (e.g., "toml", "yaml", "json", "py", "md").
+  
+  **Example:**
+  ```python
+  def extension(self) -> str:
+      return "toml"
+  ```
+</ParamField>
+
+<ParamField path="_configs" type="() -> ConfigT">
+  Return expected configuration structure.
+  
+  **Returns:**
+  Minimum required configuration as dict or list.
+  
+  **Example:**
+  ```python
+  def _configs(self) -> ConfigDict:
+      return {
+          "app": {
+              "name": "myapp",
+              "version": "1.0.0"
+          }
+      }
+  ```
+</ParamField>
+
+<ParamField path="_load" type="() -> ConfigT">
+  Load and parse configuration file.
+  
+  **Returns:**
+  Parsed configuration as dict or list. Implementations should return empty dict/list for empty files to support opt-out behavior.
+  
+  **Example:**
+  ```python
+  def _load(self) -> ConfigDict:
+      return tomlkit.parse(self.path().read_text(encoding="utf-8"))
+  ```
+</ParamField>
+
+<ParamField path="_dump" type="(config: ConfigT) -> None">
+  Write configuration to file.
+  
+  **Parameters:**
+  <ParamField path="config" type="ConfigT">
+    Configuration to write (dict or list).
+  </ParamField>
+  
+  **Example:**
+  ```python
+  def _dump(self, config: ConfigDict) -> None:
+      with self.path().open("w") as f:
+          tomlkit.dump(config, f)
+  ```
+</ParamField>
+
+### Optional Overrides
+
+<ParamField path="priority" type="() -> float">
+  Return validation priority (higher = first, default 0).
+  
+  **Returns:**
+  Priority value. Use `Priority.LOW`, `Priority.MEDIUM`, `Priority.HIGH` constants.
+  
+  **Example:**
+  ```python
+  def priority(self) -> float:
+      return Priority.HIGH  # Validate before other configs
+  ```
+</ParamField>
+
+<ParamField path="filename" type="() -> str">
+  Derive filename from class name (auto-converts to snake_case).
+  
+  **Returns:**
+  Filename without extension.
+  
+  **Example:**
+  ```python
+  # MyAppConfigFile -> my_app.toml (automatic)
+  
+  # Override for custom name:
+  def filename(self) -> str:
+      return "config"
+  ```
+</ParamField>
+
+### Public API
+
+<ParamField path="validate" type="() -> None">
+  Validate config file, creating or updating as needed.
+  
+  Calls `create_file()` if file doesn't exist, validates content, and adds missing configs if needed. Idempotent and preserves user customizations.
+  
+  **Raises:**
+  - `ValueError`: If file cannot be made correct.
+</ParamField>
+
+<ParamField path="configs" type="classmethod() -> ConfigT">
+  Return expected configuration structure (cached).
+  
+  Cached to avoid multiple calls to `_configs()`.
+  
+  **Returns:**
+  Minimum required configuration as dict or list.
+</ParamField>
+
+<ParamField path="load" type="classmethod() -> ConfigT">
+  Load and parse configuration file (cached).
+  
+  Cached to avoid multiple reads of same file.
+  
+  **Returns:**
+  Parsed configuration as dict or list.
+</ParamField>
+
+<ParamField path="dump" type="(config: ConfigT) -> None">
+  Write configuration to file (invalidates cache).
+  
+  Clears the cache before and after writing to ensure the dump operation reads the current file state and subsequent loads reflect the latest state.
+  
+  **Parameters:**
+  <ParamField path="config" type="ConfigT">
+    Configuration to write (dict or list).
+  </ParamField>
+</ParamField>
+
+<ParamField path="path" type="() -> Path">
+  Return full path by combining parent path, filename, and extension.
+  
+  **Returns:**
+  Complete path to the configuration file.
+</ParamField>
+
+<ParamField path="merge_configs" type="() -> ConfigT">
+  Merge expected config into current, preserving user customizations.
+  
+  **Returns:**
+  Merged configuration with all expected values and user additions.
+</ParamField>
+
+<ParamField path="is_correct" type="() -> bool">
+  Check if config file is valid (empty or expected is subset of actual).
+  
+  **Returns:**
+  True if valid (opted out or contains all expected configuration).
+</ParamField>
+
+<ParamField path="is_unwanted" type="() -> bool">
+  Check if user opted out (file exists and is empty).
+  
+  **Returns:**
+  True if file exists and is completely empty.
+</ParamField>
+
+### Class Methods
+
+<ParamField path="validate_all_subclasses" type="classmethod() -> None">
+  Validate all discovered ConfigFile subclasses in priority order.
+  
+  Groups subclasses by priority, validates in order, parallel within groups.
+  
+  **Example:**
+  ```python
+  # Called by pyrig mkroot
+  ConfigFile.validate_all_subclasses()
+  ```
+</ParamField>
+
+<ParamField path="validate_subclasses" type="classmethod(subclasses: Iterable[type[Self]]) -> None">
+  Validate specific ConfigFile subclasses with priority-based ordering.
+  
+  **Parameters:**
+  <ParamField path="subclasses" type="Iterable[type[Self]]">
+    ConfigFile subclasses to validate.
+  </ParamField>
+</ParamField>
+
+## Format-Specific Base Classes
+
+### TomlConfigFile
+
+<ParamField path="pyrig.rig.configs.base.toml.TomlConfigFile" type="class">
+  Base class for TOML configuration files.
+  
+  Uses tomlkit for parsing/writing with formatting preservation. Arrays formatted as multiline, key order preserved.
+  
+  **Subclasses must implement:**
+  - `parent_path()`: Directory containing the TOML file
+  - `_configs()`: Expected TOML configuration structure
+  
+  **Example:**
+  ```python
+  from pathlib import Path
+  from pyrig.rig.configs.base.toml import TomlConfigFile
+  
+  class MyConfigFile(TomlConfigFile):
+      def parent_path(self) -> Path:
+          return Path()
+      
+      def _configs(self) -> dict:
+          return {
+              "tool": {
+                  "myapp": {
+                      "version": "1.0.0",
+                      "dependencies": ["dep1", "dep2"]
+                  }
+              }
+          }
+  ```
+</ParamField>
+
+### YamlConfigFile
+
+<ParamField path="pyrig.rig.configs.base.yaml.YamlConfigFile" type="class">
+  Base class for YAML configuration files.
+  
+  Uses PyYAML's safe methods to prevent code execution. Preserves key order (sort_keys=False).
+  
+  **Subclasses must implement:**
+  - `parent_path()`: Directory containing the YAML file
+  - `_configs()`: Expected YAML configuration structure
+  
+  **Example:**
+  ```python
+  from pathlib import Path
+  from pyrig.rig.configs.base.yaml import YamlConfigFile
+  
+  class MyWorkflowConfigFile(YamlConfigFile):
+      def parent_path(self) -> Path:
+          return Path(".github/workflows")
+      
+      def _configs(self) -> dict:
+          return {
+              "name": "My Workflow",
+              "on": ["push", "pull_request"]
+          }
+  ```
+</ParamField>
+
+### JsonConfigFile
+
+<ParamField path="pyrig.rig.configs.base.json.JsonConfigFile" type="class">
+  Base class for JSON configuration files.
+  
+  Uses Python's json module with 4-space indentation. Supports both dict and list as top-level structures.
+  
+  **Subclasses must implement:**
+  - `parent_path()`: Directory containing the JSON file
+  - `_configs()`: Expected JSON configuration structure
+  
+  **Example:**
+  ```python
+  from pathlib import Path
+  from pyrig.rig.configs.base.json import JsonConfigFile
+  
+  class PackageJsonFile(JsonConfigFile):
+      def parent_path(self) -> Path:
+          return Path()
+      
+      def _configs(self) -> dict:
+          return {
+              "name": "my-package",
+              "version": "1.0.0"
+          }
+  ```
+</ParamField>
+
+### PythonConfigFile
+
+<ParamField path="pyrig.rig.configs.base.python.PythonConfigFile" type="class">
+  Base class for Python (.py) source files.
+  
+  Extends StringConfigFile with "py" extension. Inherits content-based validation.
+  
+  **Subclasses must implement:**
+  - `parent_path()`: Directory containing the .py file
+  - `lines()`: Required Python code as list of lines
+  
+  **Example:**
+  ```python
+  from pathlib import Path
+  from pyrig.rig.configs.base.python import PythonConfigFile
+  
+  class MyPythonFile(PythonConfigFile):
+      def parent_path(self) -> Path:
+          return Path("src")
+      
+      def lines(self) -> list[str]:
+          return [
+              "from typing import Any",
+              "import sys",
+              "",
+              "def main() -> None:",
+              "    pass"
+          ]
+  ```
+</ParamField>
+
+### DictConfigFile
+
+<ParamField path="pyrig.rig.configs.base.dict_cf.DictConfigFile" type="class">
+  Abstract base class for dict-based configuration files.
+  
+  Specifies ConfigDict as the configuration type. Subclasses inherit proper typing for load(), dump(), configs(), etc.
+  
+  **Subclasses must implement:**
+  - `parent_path()`: Directory containing the config file
+  - `extension()`: File extension without leading dot
+  - `_configs()`: Expected configuration as dict
+  - `_load()`: Load and parse the file
+  - `_dump()`: Write configuration to file
+</ParamField>
+
+## Priority Constants
+
+<ParamField path="pyrig.rig.configs.base.base.Priority" type="class">
+  Priority levels for config file validation ordering.
+  
+  **Constants:**
+  - `DEFAULT = 0`: Default priority
+  - `LOW = 10`: Low priority (validate later)
+  - `MEDIUM = 20`: Medium priority
+  - `HIGH = 30`: High priority (validate first)
+  
+  **Example:**
+  ```python
+  from pyrig.rig.configs.base.base import Priority
+  
+  class MyConfigFile(TomlConfigFile):
+      def priority(self) -> float:
+          return Priority.HIGH
+  ```
+</ParamField>
+
+## Usage Examples
+
+### Basic TOML Configuration
+
+```python
+from pathlib import Path
+from pyrig.rig.configs.base.toml import TomlConfigFile
+
+class MyAppConfigFile(TomlConfigFile):
+    """Manages myapp.toml configuration."""
+    
+    def parent_path(self) -> Path:
+        """Place in project root."""
+        return Path()
+    
+    def _configs(self) -> dict:
+        """Define expected configuration."""
+        return {
+            "app": {
+                "name": "myapp",
+                "version": "1.0.0",
+                "features": ["feature1", "feature2"]
+            }
+        }
+    
+    def priority(self) -> float:
+        """Validate after pyproject.toml."""
+        return 50
+```
+
+The system will automatically:
+- Create `myapp.toml` if it doesn't exist
+- Add missing keys if file exists but incomplete
+- Preserve any extra keys user added
+- Validate final result matches expected structure
+
+### YAML Workflow Configuration
+
+```python
+from pathlib import Path
+from pyrig.rig.configs.base.yaml import YamlConfigFile
+from pyrig.rig.configs.base.base import Priority
+
+class DeployWorkflowConfigFile(YamlConfigFile):
+    """Manages .github/workflows/deploy.yaml."""
+    
+    def parent_path(self) -> Path:
+        return Path(".github/workflows")
+    
+    def filename(self) -> str:
+        return "deploy"
+    
+    def _configs(self) -> dict:
+        return {
+            "name": "Deploy",
+            "on": {
+                "push": {
+                    "branches": ["main"]
+                }
+            },
+            "jobs": {
+                "deploy": {
+                    "runs-on": "ubuntu-latest",
+                    "steps": [
+                        {"uses": "actions/checkout@v4"},
+                        {"run": "echo Deploying..."}
+                    ]
+                }
+            }
+        }
+    
+    def priority(self) -> float:
+        return Priority.LOW
+```
+
+### JSON Configuration
+
+```python
+from pathlib import Path
+from pyrig.rig.configs.base.json import JsonConfigFile
+
+class SettingsConfigFile(JsonConfigFile):
+    """Manages settings.json."""
+    
+    def parent_path(self) -> Path:
+        return Path(".vscode")
+    
+    def _configs(self) -> dict:
+        return {
+            "python.linting.enabled": True,
+            "python.formatting.provider": "ruff",
+            "editor.formatOnSave": True
+        }
+```
+
+### Custom File Format
+
+```python
+from pathlib import Path
+from pyrig.rig.configs.base.base import ConfigDict
+from pyrig.rig.configs.base.dict_cf import DictConfigFile
+
+class IniConfigFile(DictConfigFile):
+    """Base class for INI-style configuration files."""
+    
+    def extension(self) -> str:
+        return "ini"
+    
+    def _load(self) -> ConfigDict:
+        # Parse INI file
+        import configparser
+        config = configparser.ConfigParser()
+        config.read(self.path())
+        return {section: dict(config[section]) for section in config.sections()}
+    
+    def _dump(self, config: ConfigDict) -> None:
+        # Write INI file
+        import configparser
+        parser = configparser.ConfigParser()
+        for section, values in config.items():
+            parser[section] = values
+        with self.path().open("w") as f:
+            parser.write(f)
+
+class MyIniFile(IniConfigFile):
+    def parent_path(self) -> Path:
+        return Path()
+    
+    def _configs(self) -> dict:
+        return {
+            "section1": {"key1": "value1"},
+            "section2": {"key2": "value2"}
+        }
+```
+
+## Best Practices
+
+1. **Use appropriate base classes**: Choose TomlConfigFile, YamlConfigFile, etc. for common formats
+2. **Set priorities**: Use Priority constants to control validation order
+3. **Preserve user customizations**: The system automatically merges expected configs with user additions
+4. **Support opt-out**: Empty files are treated as user opt-out
+5. **Use descriptive class names**: Class names auto-convert to filenames (MyAppConfigFile -> my_app.toml)
+6. **Cache-aware**: Use `configs()` and `load()` (cached) instead of `_configs()` and `_load()`
+7. **Idempotent operations**: Design configs to be safe to validate multiple times
+
+## Related APIs
+
+- [CLI API](/api/cli) - For command-line interface framework
+- [Builders API](/api/builders) - For creating distributable artifacts

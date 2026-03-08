@@ -1,0 +1,591 @@
+---
+title: Version Controller
+description: Git wrapper for version control operations
+---
+
+## Overview
+
+The `VersionController` class provides a type-safe wrapper around Git for version control operations. It offers methods for repository initialization, staging, committing, pushing, tagging, and configuration.
+
+## Location
+
+`pyrig.rig.tools.version_controller.VersionController` (rig/tools/version_controller.py:24)
+
+## Quick Start
+
+```python
+from pyrig.rig.tools.version_controller import VersionController
+
+# Initialize repository
+VersionController.I.init_args().run()
+
+# Stage all changes
+VersionController.I.add_all_args().run()
+
+# Commit with message
+VersionController.I.commit_no_verify_args(msg="Initial commit").run()
+
+# Push to remote
+VersionController.I.push_args().run()
+```
+
+## Repository Setup
+
+### Initialize Repository
+
+```python
+def init_args(self, *args: str) -> Args:
+    """Construct git init arguments.
+    
+    Returns:
+        Args for 'git init'.
+    """
+    return self.args("init", *args)
+
+# Usage
+VersionController.I.init_args().run()
+VersionController.I.init_args("--initial-branch=main").run()
+```
+
+### Configuration Methods
+
+```python
+def default_branch(self) -> str:
+    """Get the default branch name.
+    
+    Returns:
+        Default branch name ('main').
+    """
+    return "main"
+
+def ignore_filename(self) -> str:
+    """Get the filename for .gitignore.
+    
+    Returns:
+        Filename for .gitignore ('.gitignore').
+    """
+    return ".gitignore"
+
+def default_ruleset_name(self) -> str:
+    """Get the default branch protection ruleset name.
+    
+    Returns:
+        Default ruleset name ('main-protection').
+    """
+    return f"{self.default_branch()}-protection"
+```
+
+## Staging Changes
+
+<Tabs>
+  <Tab title="Stage Specific Files">
+    ```python
+    def add_args(self, *args: str) -> Args:
+        """Construct git add arguments.
+        
+        Args:
+            *args: Files or paths to add.
+        
+        Returns:
+            Args for 'git add'.
+        """
+        return self.args("add", *args)
+    
+    # Usage
+    VersionController.I.add_args("README.md").run()
+    VersionController.I.add_args("src/", "tests/").run()
+    ```
+  </Tab>
+  <Tab title="Stage All Changes">
+    ```python
+    def add_all_args(self, *args: str) -> Args:
+        """Construct git add arguments for all files.
+        
+        Returns:
+            Args for 'git add .'.
+        """
+        return self.add_args(".", *args)
+    
+    # Usage
+    VersionController.I.add_all_args().run()
+    ```
+  </Tab>
+  <Tab title="Stage Project Files">
+    ```python
+    def add_pyproject_toml_args(self, *args: str) -> Args:
+        """Construct git add arguments for pyproject.toml.
+        
+        Returns:
+            Args for 'git add pyproject.toml'.
+        """
+        return self.add_args("pyproject.toml", *args)
+    
+    def add_pyproject_toml_and_lock_file_args(self, *args: str) -> Args:
+        """Construct git add arguments for pyproject.toml and uv.lock.
+        
+        Returns:
+            Args for 'git add pyproject.toml uv.lock'.
+        """
+        return self.add_pyproject_toml_args("uv.lock", *args)
+    
+    # Usage
+    VersionController.I.add_pyproject_toml_args().run()
+    VersionController.I.add_pyproject_toml_and_lock_file_args().run()
+    ```
+  </Tab>
+</Tabs>
+
+## Committing Changes
+
+<CodeGroup>
+```python Basic Commit
+def commit_args(self, *args: str) -> Args:
+    """Construct git commit arguments.
+    
+    Returns:
+        Args for 'git commit'.
+    """
+    return self.args("commit", *args)
+
+# Usage
+VersionController.I.commit_args("-m", "Add feature").run()
+```
+
+```python Commit Without Verification
+def commit_no_verify_args(self, *args: str, msg: str) -> Args:
+    """Construct git commit arguments with no verification.
+    
+    Args:
+        *args: Commit command arguments.
+        msg: Commit message (keyword-only).
+    
+    Returns:
+        Args for 'git commit --no-verify -m <msg>'.
+    """
+    return self.commit_args("--no-verify", "-m", msg, *args)
+
+# Usage
+VersionController.I.commit_no_verify_args(msg="Quick fix").run()
+```
+</CodeGroup>
+
+## Remote Operations
+
+### Pushing Changes
+
+<Tabs>
+  <Tab title="Basic Push">
+    ```python
+    def push_args(self, *args: str) -> Args:
+        """Construct git push arguments.
+        
+        Returns:
+            Args for 'git push'.
+        """
+        return self.args("push", *args)
+    
+    # Usage
+    VersionController.I.push_args().run()
+    VersionController.I.push_args("--force-with-lease").run()
+    ```
+  </Tab>
+  <Tab title="Push to Origin">
+    ```python
+    def push_origin_args(self, *args: str) -> Args:
+        """Construct git push arguments for origin.
+        
+        Returns:
+            Args for 'git push origin'.
+        """
+        return self.push_args("origin", *args)
+    
+    # Usage
+    VersionController.I.push_origin_args().run()
+    VersionController.I.push_origin_args("main").run()
+    ```
+  </Tab>
+  <Tab title="Push Tag">
+    ```python
+    def push_origin_tag_args(self, *args: str, tag: str) -> Args:
+        """Construct git push arguments for origin and tag.
+        
+        Args:
+            tag: Tag name (keyword-only).
+        
+        Returns:
+            Args for 'git push origin <tag>'.
+        """
+        return self.push_origin_args(tag, *args)
+    
+    # Usage
+    VersionController.I.push_origin_tag_args(tag="v1.0.0").run()
+    ```
+  </Tab>
+</Tabs>
+
+## Tagging
+
+```python
+def tag_args(self, *args: str, tag: str) -> Args:
+    """Construct git tag arguments.
+    
+    Args:
+        tag: Tag name (keyword-only).
+    
+    Returns:
+        Args for 'git tag <tag>'.
+    """
+    return self.args("tag", tag, *args)
+
+# Usage
+VersionController.I.tag_args(tag="v1.0.0").run()
+VersionController.I.tag_args(tag="v1.0.0", "-a", "-m", "Release 1.0.0").run()
+
+# Create and push a tag
+VersionController.I.tag_args(tag="v1.0.0").run()
+VersionController.I.push_origin_tag_args(tag="v1.0.0").run()
+```
+
+## Git Configuration
+
+### Global Configuration
+
+<CodeGroup>
+```python Configure User Name
+def config_global_user_name_args(self, *args: str, name: str) -> Args:
+    """Construct git config arguments for global user name.
+    
+    Args:
+        name: Name (keyword-only).
+    
+    Returns:
+        Args for 'git config --global user.name <name>'.
+    """
+    return self.config_global_args("user.name", name, *args)
+
+# Usage
+VersionController.I.config_global_user_name_args(name="John Doe").run()
+```
+
+```python Configure User Email
+def config_global_user_email_args(self, *args: str, email: str) -> Args:
+    """Construct git config arguments for global user email.
+    
+    Args:
+        email: Email address (keyword-only).
+    
+    Returns:
+        Args for 'git config --global user.email <email>'.
+    """
+    return self.config_global_args("user.email", email, *args)
+
+# Usage
+VersionController.I.config_global_user_email_args(
+    email="john@example.com"
+).run()
+```
+</CodeGroup>
+
+### Local Configuration
+
+<CodeGroup>
+```python Local User Name
+def config_local_user_name_args(self, *args: str, name: str) -> Args:
+    """Construct git config arguments for local user name.
+    
+    Returns:
+        Args for 'git config --local user.name <name>'.
+    """
+    return self.config_local_args("user.name", name, *args)
+
+# Usage
+VersionController.I.config_local_user_name_args(name="Bot").run()
+```
+
+```python Local User Email
+def config_local_user_email_args(self, *args: str, email: str) -> Args:
+    """Construct git config arguments for local user email.
+    
+    Returns:
+        Args for 'git config --local user.email <email>'.
+    """
+    return self.config_local_args("user.email", email, *args)
+
+# Usage
+VersionController.I.config_local_user_email_args(
+    email="bot@example.com"
+).run()
+```
+</CodeGroup>
+
+## Reading Configuration
+
+### Get Configuration Values
+
+```python
+def config_get_user_name_args(self, *args: str) -> Args:
+    """Construct git config get user name arguments.
+    
+    Returns:
+        Args for 'git config --get user.name'.
+    """
+    return self.config_get_args("user.name", *args)
+
+def config_get_user_email_args(self, *args: str) -> Args:
+    """Construct git config get user email arguments.
+    
+    Returns:
+        Args for 'git config --get user.email'.
+    """
+    return self.config_get_args("user.email", *args)
+
+def config_remote_origin_url_args(self, *args: str) -> Args:
+    """Construct git config get remote origin URL arguments.
+    
+    Returns:
+        Args for 'git config --get remote.origin.url'.
+    """
+    return self.config_get_args("remote.origin.url", *args)
+
+# Usage
+result = VersionController.I.config_get_user_name_args().run()
+username = result.stdout.strip()
+
+result = VersionController.I.config_get_user_email_args().run()
+email = result.stdout.strip()
+```
+
+### Helper Methods
+
+```python
+def username(self) -> str:
+    """Get git username from config.
+    
+    Returns:
+        Configured git username.
+    """
+    args = self.config_get_user_name_args()
+    stdout = args.run_cached().stdout
+    return stdout.strip()
+
+def email(self) -> str:
+    """Get the email from git config.
+    
+    Returns:
+        Email address.
+    """
+    args = self.config_get_user_email_args()
+    stdout = args.run_cached().stdout
+    return stdout.strip()
+
+def repo_remote(self, *, check: bool = True) -> str:
+    """Get the remote origin URL from git config.
+    
+    Args:
+        check: Whether to raise exception if command fails.
+    
+    Returns:
+        Remote origin URL (HTTPS or SSH format).
+        Empty string if check=False and no remote.
+    """
+    args = self.config_remote_origin_url_args()
+    stdout = args.run_cached(check=check).stdout
+    return stdout.strip()
+
+# Usage
+print(f"User: {VersionController.I.username()}")
+print(f"Email: {VersionController.I.email()}")
+print(f"Remote: {VersionController.I.repo_remote()}")
+```
+
+## Diffing
+
+<Tabs>
+  <Tab title="View Diff">
+    ```python
+    def diff_args(self, *args: str) -> Args:
+        """Construct git diff arguments.
+        
+        Returns:
+            Args for 'git diff'.
+        """
+        return self.args("diff", *args)
+    
+    def diff(self) -> str:
+        """Get the diff output.
+        
+        Returns:
+            Diff output.
+        """
+        args = self.diff_args()
+        completed_process = args.run(check=False)
+        return completed_process.stdout
+    
+    # Usage
+    diff_output = VersionController.I.diff()
+    if diff_output:
+        print("Uncommitted changes:")
+        print(diff_output)
+    ```
+  </Tab>
+  <Tab title="Check for Changes">
+    ```python
+    def diff_quiet_args(self, *args: str) -> Args:
+        """Construct git diff arguments with --quiet flag.
+        
+        Returns:
+            Args for 'git diff --quiet'.
+        """
+        return self.diff_args("--quiet", *args)
+    
+    def has_unstaged_diff(self) -> bool:
+        """Check if there are any unstaged changes.
+        
+        Returns:
+            True if there are unstaged changes.
+        """
+        args = self.diff_quiet_args()
+        completed_process = args.run(check=False)
+        return completed_process.returncode != 0
+    
+    # Usage
+    if VersionController.I.has_unstaged_diff():
+        print("You have uncommitted changes")
+    ```
+  </Tab>
+</Tabs>
+
+## Repository Information
+
+### Get Owner and Name
+
+```python
+@classmethod
+def repo_owner_and_name(
+    cls,
+    *,
+    check_repo_url: bool = True,
+    url_encode: bool = False
+) -> tuple[str, str]:
+    """Get the repository owner and name.
+    
+    Parses the git remote origin URL to extract owner and repo name.
+    Falls back to the git username and current working directory name
+    if no remote is configured.
+    
+    Args:
+        check_repo_url: Whether to raise on missing remote. Defaults to True.
+        url_encode: Whether to percent-encode the returned strings.
+    
+    Returns:
+        Tuple of (owner, repository_name).
+    """
+
+# Usage
+owner, repo = VersionController.repo_owner_and_name()
+print(f"Repository: {owner}/{repo}")
+
+# For URL construction
+owner, repo = VersionController.repo_owner_and_name(url_encode=True)
+url = f"https://github.com/{owner}/{repo}"
+```
+
+### Gitignore Management
+
+```python
+def ignore_path(self) -> Path:
+    """Get the path to the .gitignore file.
+    
+    Returns:
+        Path to .gitignore.
+    """
+    return Path(self.ignore_filename())
+
+def loaded_ignore(self) -> list[str]:
+    """Get the loaded gitignore patterns.
+    
+    Returns:
+        List of gitignore patterns.
+    """
+    return self.ignore_path().read_text(encoding="utf-8").splitlines()
+
+# Usage
+ignore_patterns = VersionController.I.loaded_ignore()
+for pattern in ignore_patterns:
+    print(pattern)
+```
+
+## Complete Workflow Example
+
+```python
+from pyrig.rig.tools.version_controller import VersionController
+from pyrig.rig.tools.package_manager import PackageManager
+
+# Initialize new repository
+VersionController.I.init_args().run()
+
+# Configure git
+VersionController.I.config_local_user_name_args(name="Developer").run()
+VersionController.I.config_local_user_email_args(
+    email="dev@example.com"
+).run()
+
+# Make initial commit
+VersionController.I.add_all_args().run()
+VersionController.I.commit_no_verify_args(msg="Initial commit").run()
+
+# Add dependency and commit
+PackageManager.I.add_dependencies_args("requests").run()
+VersionController.I.add_pyproject_toml_and_lock_file_args().run()
+VersionController.I.commit_no_verify_args(msg="Add requests dependency").run()
+
+# Create and push a release tag
+VersionController.I.tag_args(tag="v1.0.0", "-a", "-m", "Release 1.0.0").run()
+VersionController.I.push_origin_args().run()
+VersionController.I.push_origin_tag_args(tag="v1.0.0").run()
+
+# Check for uncommitted changes
+if VersionController.I.has_unstaged_diff():
+    diff = VersionController.I.diff()
+    print("Uncommitted changes detected:")
+    print(diff)
+```
+
+## Customization
+
+```python
+from pyrig.rig.tools.version_controller import VersionController
+from pyrig.src.processes import Args
+
+class CustomVersionController(VersionController):
+    """Version controller with custom defaults."""
+    
+    def default_branch(self) -> str:
+        """Use 'develop' as default branch."""
+        return "develop"
+    
+    def commit_args(self, *args: str) -> Args:
+        """Always sign commits."""
+        return super().commit_args("--gpg-sign", *args)
+    
+    def push_args(self, *args: str) -> Args:
+        """Always use --force-with-lease."""
+        return super().push_args("--force-with-lease", *args)
+```
+
+## See Also
+
+<CardGroup cols={2}>
+  <Card title="Git Documentation" icon="book" href="https://git-scm.com/doc">
+    Official Git documentation
+  </Card>
+  <Card title="Package Manager" icon="box" href="/tools/package-manager">
+    UV package manager wrapper
+  </Card>
+  <Card title="Tools Overview" icon="wrench" href="/tools/overview">
+    Learn about the Tool pattern
+  </Card>
+  <Card title="Project Tester" icon="vial" href="/tools/project-tester">
+    Run tests with pytest
+  </Card>
+</CardGroup>

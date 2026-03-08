@@ -1,0 +1,268 @@
+---
+title: pyrig mkinits
+description: Create missing __init__.py files for all namespace packages
+---
+
+## Overview
+
+The `mkinits` command scans the project for namespace packages (directories with Python files but no `__init__.py`) and creates minimal `__init__.py` files for them. This ensures all packages follow traditional Python package conventions and are properly importable.
+
+```bash
+uv run pyrig mkinits
+```
+
+## What It Does
+
+The command:
+
+1. **Scans** the project directory for namespace packages (PEP 420 packages)
+2. **Identifies** directories containing `.py` files but missing `__init__.py`
+3. **Creates** minimal `__init__.py` files with docstrings
+4. **Excludes** the `docs/` directory from scanning
+5. **Uses parallel execution** for performance on large projects
+
+<Note>
+  The command is **idempotent** and **non-destructive**: safe to run multiple times, only creates missing files, never modifies existing ones.
+</Note>
+
+## Usage
+
+### Basic Usage
+
+```bash
+uv run pyrig mkinits
+```
+
+### After Adding New Packages
+
+```bash
+# 1. Create new package directories with Python files
+mkdir -p src/myproject/utils
+touch src/myproject/utils/helpers.py
+
+# 2. Generate __init__.py files
+uv run pyrig mkinits
+
+# Now src/myproject/utils/__init__.py exists
+```
+
+### With Verbose Output
+
+```bash
+# See which __init__.py files are being created
+uv run pyrig -v mkinits
+
+# See detailed package scanning
+uv run pyrig -vv mkinits
+```
+
+### Quiet Mode
+
+```bash
+# Only show warnings and errors
+uv run pyrig -q mkinits
+```
+
+## Expected Output
+
+```bash
+$ uv run pyrig mkinits
+Scanning for namespace packages...
+✓ Created 3 __init__.py files
+```
+
+```bash
+$ uv run pyrig -v mkinits
+DEBUG: Scanning project for namespace packages
+DEBUG: Found namespace package: myproject.utils
+DEBUG: Found namespace package: myproject.models
+INFO: Creating myproject/utils/__init__.py
+INFO: Creating myproject/models/__init__.py
+✓ Created 2 __init__.py files
+```
+
+```bash
+# When no namespace packages exist
+$ uv run pyrig mkinits
+Scanning for namespace packages...
+✓ No namespace packages found
+```
+
+## Generated Files
+
+Created `__init__.py` files contain a minimal docstring:
+
+```python
+# src/myproject/utils/__init__.py
+"""Utils package."""
+```
+
+The docstring is automatically generated based on the package name.
+
+## Behavior
+
+<ParamField path="Detection" type="automatic">
+  Automatically finds all directories containing `.py` files but missing `__init__.py`.
+</ParamField>
+
+<ParamField path="Creation" type="minimal">
+  Creates minimal `__init__.py` files with just a docstring. No imports or other content.
+</ParamField>
+
+<ParamField path="Exclusions" type="docs-directory">
+  The `docs/` directory is explicitly excluded from scanning to avoid creating `__init__.py` in documentation.
+</ParamField>
+
+<ParamField path="Preservation" type="guaranteed">
+  **Never modifies** existing `__init__.py` files. Only creates new ones.
+</ParamField>
+
+<ParamField path="Performance" type="parallel">
+  Uses `ThreadPoolExecutor` for parallel file creation on large projects.
+</ParamField>
+
+## When to Use
+
+### Use `mkinits` When:
+
+- You've created new package directories
+- Converting from namespace packages (PEP 420) to traditional packages
+- Ensuring all packages have `__init__.py` for better tooling support
+- Import errors due to missing `__init__.py` files
+- Setting up a new project structure
+
+### Example Workflow
+
+<Steps>
+  <Step title="Create package structure">
+    ```bash
+    mkdir -p src/myproject/utils
+    mkdir -p src/myproject/models
+    touch src/myproject/utils/helpers.py
+    touch src/myproject/models/user.py
+    ```
+  </Step>
+  
+  <Step title="Generate __init__.py files">
+    ```bash
+    uv run pyrig mkinits
+    ```
+  </Step>
+  
+  <Step title="Verify creation">
+    ```bash
+    ls src/myproject/utils/__init__.py
+    ls src/myproject/models/__init__.py
+    ```
+  </Step>
+</Steps>
+
+## Namespace Packages vs Traditional Packages
+
+### Namespace Packages (PEP 420)
+
+```
+myproject/
+└── utils/
+    └── helpers.py    # No __init__.py
+```
+
+- Allows split packages across multiple locations
+- Some tools have limited support
+- Implicit namespace packages
+
+### Traditional Packages
+
+```
+myproject/
+└── utils/
+    ├── __init__.py   # Explicit package marker
+    └── helpers.py
+```
+
+- Better tooling support
+- Explicit package boundaries
+- Standard Python convention
+
+pyrig prefers **traditional packages** for better IDE support and explicit package structure.
+
+## Customizing Generated Content
+
+The default `__init__.py` is minimal. To customize, you can:
+
+1. **Run `mkinits`** to create the files
+2. **Edit the files** to add imports, `__all__`, or other content
+3. **Re-run safely** - `mkinits` won't overwrite existing files
+
+```python
+# After running mkinits, customize:
+# src/myproject/utils/__init__.py
+"""Utility functions and helpers."""
+
+from myproject.utils.helpers import helper_function
+
+__all__ = ['helper_function']
+```
+
+## Excluded Directories
+
+The following directories are excluded from scanning:
+
+- `docs/` - Documentation directory
+- `__pycache__/` - Python cache directories
+- `.git/` - Version control
+- Hidden directories (starting with `.`)
+
+<Warning>
+  If you need namespace packages (PEP 420) for specific reasons, **do not run** `mkinits`. It will convert them to traditional packages.
+</Warning>
+
+## Integration with Other Commands
+
+### After `init`
+
+The `init` command doesn't automatically run `mkinits`. Run it separately if needed:
+
+```bash
+uv run pyrig init
+uv run pyrig mkinits
+```
+
+### Before `mktests`
+
+Run `mkinits` before generating tests to ensure proper package structure:
+
+```bash
+uv run pyrig mkinits   # First: ensure packages are valid
+uv run pyrig mktests   # Then: generate test skeletons
+```
+
+### With `mkroot`
+
+Can be run in any order - they're independent:
+
+```bash
+uv run pyrig mkroot    # Generate configs
+uv run pyrig mkinits   # Add __init__.py files
+```
+
+## Related Commands
+
+- **[init](/cli/commands/init)** - Full project initialization
+- **[mktests](/cli/commands/mktests)** - Generate test skeletons (benefits from proper package structure)
+- **[mkroot](/cli/commands/mkroot)** - Create configuration files
+
+## Implementation
+
+The `mkinits` command:
+
+1. Calls `find_namespace_packages()` to discover namespace packages
+2. Converts package names to directory paths
+3. Uses `ThreadPoolExecutor.map()` to create `__init__.py` files in parallel
+4. Each file is created via `make_init_module()`
+
+See `pyrig/rig/cli/commands/make_inits.py:14`.
+
+<Note>
+  Run `uv run pyrig mkinits --help` to see the command's built-in help text.
+</Note>

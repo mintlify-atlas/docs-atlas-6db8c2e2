@@ -1,0 +1,492 @@
+---
+title: Builders API
+description: Artifact builders for creating distributable packages
+---
+
+The Builders API provides a framework for creating build artifacts with platform-specific naming and organized output. Builders extend the configuration system to generate distributable artifacts instead of configuration files.
+
+## Base Class
+
+### BuilderConfigFile
+
+<ParamField path="pyrig.rig.builders.base.base.BuilderConfigFile" type="class">
+  Abstract base class for artifact builders.
+  
+  BuilderConfigFile provides a framework for creating build artifacts with platform-specific naming and organized output. It extends ListConfigFile but adapts its interface for build operations rather than configuration management.
+  
+  **The build lifecycle:**
+  1. A temporary directory is created
+  2. `create_artifacts()` is called (implemented by subclasses)
+  3. Artifacts are collected from the temporary directory
+  4. Artifacts are renamed with platform suffixes (e.g., `-Linux`, `-Windows`)
+  5. Artifacts are moved to the final output directory (default: `dist/`)
+  
+  **Subclasses must implement:**
+  - `create_artifacts(temp_artifacts_dir: Path) -> None`: Define build logic
+  
+  **Example:**
+  ```python
+  from pathlib import Path
+  from pyrig.rig.builders.base.base import BuilderConfigFile
+  
+  class ExecutableBuilder(BuilderConfigFile):
+      def create_artifacts(self, temp_artifacts_dir: Path) -> None:
+          exe_path = temp_artifacts_dir / f"{self.app_name()}.exe"
+          # ... compile and create executable ...
+  ```
+</ParamField>
+
+## Abstract Methods (Must Implement)
+
+<ParamField path="create_artifacts" type="(temp_artifacts_dir: Path) -> None">
+  Create artifacts in the temporary directory.
+  
+  Subclasses must implement this method to define their build logic. All artifacts should be written to the provided temporary directory. The Builder framework will automatically collect, rename, and move artifacts to the final output directory.
+  
+  **Parameters:**
+  <ParamField path="temp_artifacts_dir" type="Path" required>
+    Temporary directory where artifacts should be created. All files created here will be moved to the final output directory with platform-specific naming.
+  </ParamField>
+  
+  **Example:**
+  ```python
+  def create_artifacts(self, temp_artifacts_dir: Path) -> None:
+      output = temp_artifacts_dir / "docs.zip"
+      # Create documentation archive
+      shutil.make_archive(
+          str(output.with_suffix("")),
+          "zip",
+          "docs/_build/html"
+      )
+  ```
+</ParamField>
+
+## Instance Methods
+
+<ParamField path="build" type="() -> None">
+  Execute the complete build process.
+  
+  Main orchestration method that manages the build lifecycle: creates a temporary directory, invokes `create_artifacts()`, collects artifacts, renames them with platform-specific suffixes, and moves them to the final output directory.
+</ParamField>
+
+<ParamField path="parent_path" type="() -> Path">
+  Get the parent directory for artifacts.
+  
+  For builders, this is the directory where artifacts are stored. The default is "dist", but can be overridden by subclasses.
+  
+  **Returns:**
+  Path to the artifacts directory (e.g., "dist").
+</ParamField>
+
+<ParamField path="dist_dir_name" type="classmethod() -> str">
+  Get the name of the artifacts directory.
+  
+  Default is "dist", but can be overridden by subclasses. Is a classmethod because it's used in WorkflowConfigFile subclasses and BuilderConfigFile itself is abstract.
+  
+  **Returns:**
+  Name of the artifacts directory (e.g., "dist").
+</ParamField>
+
+<ParamField path="app_name" type="() -> str">
+  Return the application name from pyproject.toml.
+  
+  **Returns:**
+  Project name from package manager.
+</ParamField>
+
+<ParamField path="root_path" type="() -> Path">
+  Return the absolute path to the project root directory.
+  
+  **Returns:**
+  Path to project root.
+</ParamField>
+
+<ParamField path="main_path" type="() -> Path">
+  Return the absolute path to the main.py entry point.
+  
+  **Returns:**
+  Path to main.py file.
+</ParamField>
+
+<ParamField path="resources_path" type="() -> Path">
+  Return the absolute path to the resources directory.
+  
+  **Returns:**
+  Path to resources directory.
+</ParamField>
+
+<ParamField path="src_package_path" type="() -> Path">
+  Return the absolute path to the source package directory.
+  
+  **Returns:**
+  Path to source package.
+</ParamField>
+
+<ParamField path="platform_specific_name" type="(artifact: Path) -> str">
+  Generate a platform-specific filename (e.g., `myapp-Linux.exe`).
+  
+  **Parameters:**
+  <ParamField path="artifact" type="Path" required>
+    Path to the artifact.
+  </ParamField>
+  
+  **Returns:**
+  Filename with platform suffix.
+  
+  **Example:**
+  ```python
+  # On Linux:
+  platform_specific_name(Path("myapp.exe"))
+  # Returns: "myapp-Linux.exe"
+  
+  # On Windows:
+  platform_specific_name(Path("myapp.exe"))
+  # Returns: "myapp-Windows.exe"
+  ```
+</ParamField>
+
+## PyInstaller Builder
+
+### PyInstallerBuilder
+
+<ParamField path="pyrig.rig.builders.pyinstaller.PyInstallerBuilder" type="class">
+  Abstract builder for creating PyInstaller standalone executables.
+  
+  Extends BuilderConfigFile to provide PyInstaller-specific functionality for creating single-file executables. Handles PyInstaller configuration, resource bundling, and icon conversion.
+  
+  **Creates executables with:**
+  - Single-file executable (`--onefile`)
+  - No console window (`--noconsole`)
+  - Platform-specific icon (ICO/ICNS/PNG)
+  - All resources bundled and accessible at runtime
+  - Clean build (`--clean`)
+  
+  Resources are automatically discovered from packages depending on pyrig, plus additional packages specified by `additional_resource_packages()`.
+  
+  **Subclasses must implement:**
+  - `additional_resource_packages() -> Iterable[ModuleType]`: Specify resource packages to bundle
+  
+  **Example:**
+  ```python
+  from types import ModuleType
+  from pyrig.rig.builders.pyinstaller import PyInstallerBuilder
+  from pyrig import resources
+  
+  class AppBuilder(PyInstallerBuilder):
+      def additional_resource_packages(self) -> list[ModuleType]:
+          return [resources]
+  ```
+</ParamField>
+
+### PyInstallerBuilder Methods
+
+<ParamField path="additional_resource_packages" type="() -> Iterable[ModuleType]">
+  Return packages containing additional resources to bundle.
+  
+  Subclasses must implement this method to specify resource packages beyond the automatically discovered ones. All files in the specified packages will be included in the executable and accessible at runtime.
+  
+  **Returns:**
+  Iterable of module objects representing resource packages.
+  
+  **Example:**
+  ```python
+  def additional_resource_packages(self) -> tuple[ModuleType, ...]:
+      from myapp import resources, templates
+      return (resources, templates)
+  ```
+</ParamField>
+
+<ParamField path="default_additional_resource_packages" type="() -> Generator[ModuleType, None, None]">
+  Get resource packages from all pyrig-dependent packages.
+  
+  Automatically discovers all `resources` modules from packages that depend on pyrig, enabling multi-package applications to bundle resources from their entire dependency chain.
+  
+  **Returns:**
+  Generator of module objects representing resources packages from all packages in the dependency chain.
+</ParamField>
+
+<ParamField path="all_resource_packages" type="() -> Generator[ModuleType, None, None]">
+  Get all resource packages to bundle in the executable.
+  
+  Combines auto-discovered resource packages with additional packages specified by the subclass.
+  
+  **Returns:**
+  Generator of all resource packages to bundle.
+</ParamField>
+
+<ParamField path="add_datas" type="() -> list[tuple[str, str]]">
+  Build the --add-data arguments for PyInstaller.
+  
+  Collects all data files from all resource packages and formats them as PyInstaller --add-data arguments.
+  
+  **Returns:**
+  List of (source_path, destination_path) tuples for PyInstaller's --add-data argument.
+</ParamField>
+
+<ParamField path="pyinstaller_options" type="(temp_artifacts_dir: Path) -> tuple[str, ...]">
+  Build the complete PyInstaller command-line options.
+  
+  Constructs the full list of command-line arguments for PyInstaller, including entry point, flags, paths, icon, and resource files.
+  
+  **Parameters:**
+  <ParamField path="temp_artifacts_dir" type="Path" required>
+    Temporary directory for the executable.
+  </ParamField>
+  
+  **Returns:**
+  Tuple of command-line arguments for PyInstaller.
+</ParamField>
+
+<ParamField path="app_icon_path" type="(temp_dir: Path) -> Path">
+  Get the platform-appropriate icon path.
+  
+  Converts the PNG icon to the appropriate format for the current platform: Windows (ICO), macOS (ICNS), or Linux (PNG).
+  
+  **Parameters:**
+  <ParamField path="temp_dir" type="Path" required>
+    Temporary directory for the converted icon.
+  </ParamField>
+  
+  **Returns:**
+  Path to the converted icon file.
+</ParamField>
+
+<ParamField path="app_icon_png_path" type="() -> Path">
+  Get the path to the application icon PNG.
+  
+  Returns the path to the source PNG icon file. Override this method to use a custom icon location.
+  
+  **Returns:**
+  Absolute path to the PNG icon file (`<src_package>/resources/icon.png`).
+</ParamField>
+
+<ParamField path="convert_png_to_format" type="(file_format: str, temp_dir_path: Path) -> Path">
+  Convert the application icon PNG to another format.
+  
+  Uses PIL/Pillow to convert the source PNG icon to the specified format (ico, icns, or png).
+  
+  **Parameters:**
+  <ParamField path="file_format" type="str" required>
+    Target format extension ("ico", "icns", or "png").
+  </ParamField>
+  <ParamField path="temp_dir_path" type="Path" required>
+    Directory where the converted icon should be written.
+  </ParamField>
+  
+  **Returns:**
+  Path to the converted icon file.
+</ParamField>
+
+## Usage Examples
+
+### Basic Builder
+
+```python
+from pathlib import Path
+import shutil
+from pyrig.rig.builders.base.base import BuilderConfigFile
+
+class DocsBuilder(BuilderConfigFile):
+    """Build documentation archive."""
+    
+    def create_artifacts(self, temp_artifacts_dir: Path) -> None:
+        """Create documentation ZIP archive."""
+        # Build documentation
+        import subprocess
+        subprocess.run(["mkdocs", "build"], check=True)
+        
+        # Create archive
+        output = temp_artifacts_dir / "docs"
+        shutil.make_archive(
+            str(output),
+            "zip",
+            "site"
+        )
+
+# Run with:
+# $ uv run pyrig build
+# Creates: dist/docs-Linux.zip, dist/docs-Windows.zip, etc.
+```
+
+### PyInstaller Executable
+
+```python
+from types import ModuleType
+from pyrig.rig.builders.pyinstaller import PyInstallerBuilder
+from pyrig import resources
+import myapp.templates
+
+class MyAppBuilder(PyInstallerBuilder):
+    """Build standalone executable for myapp."""
+    
+    def additional_resource_packages(self) -> list[ModuleType]:
+        """Bundle resources and templates."""
+        return [resources, myapp.templates]
+
+# Requires:
+# - myapp/resources/icon.png (for icon)
+# - myapp/main.py (entry point)
+
+# Run with:
+# $ uv run pyrig build
+# Creates: dist/myapp-Linux, dist/myapp-Windows.exe, etc.
+```
+
+### Custom Icon Location
+
+```python
+from pathlib import Path
+from types import ModuleType
+from pyrig.rig.builders.pyinstaller import PyInstallerBuilder
+from pyrig import resources
+
+class CustomIconBuilder(PyInstallerBuilder):
+    """Builder with custom icon location."""
+    
+    def additional_resource_packages(self) -> list[ModuleType]:
+        return [resources]
+    
+    def app_icon_png_path(self) -> Path:
+        """Use custom icon location."""
+        return Path("assets/icons/app-icon.png")
+```
+
+### Multiple Artifacts
+
+```python
+from pathlib import Path
+import shutil
+import subprocess
+from pyrig.rig.builders.base.base import BuilderConfigFile
+
+class MultiArtifactBuilder(BuilderConfigFile):
+    """Build multiple artifacts."""
+    
+    def create_artifacts(self, temp_artifacts_dir: Path) -> None:
+        """Create documentation and source archives."""
+        # Build documentation
+        subprocess.run(["mkdocs", "build"], check=True)
+        docs_output = temp_artifacts_dir / "docs"
+        shutil.make_archive(str(docs_output), "zip", "site")
+        
+        # Create source archive
+        src_output = temp_artifacts_dir / "source"
+        shutil.make_archive(str(src_output), "tar", "src")
+        
+        # Create wheel
+        subprocess.run(["uv", "build"], check=True)
+        for wheel in Path("dist").glob("*.whl"):
+            shutil.copy(wheel, temp_artifacts_dir)
+
+# Creates:
+# - dist/docs-Linux.zip
+# - dist/source-Linux.tar
+# - dist/myapp-1.0.0-py3-none-any-Linux.whl
+```
+
+### Builder with Priority
+
+```python
+from pathlib import Path
+from pyrig.rig.builders.base.base import BuilderConfigFile
+from pyrig.rig.configs.base.base import Priority
+
+class HighPriorityBuilder(BuilderConfigFile):
+    """Builder that runs before others."""
+    
+    def priority(self) -> float:
+        """Run first."""
+        return Priority.HIGH
+    
+    def create_artifacts(self, temp_artifacts_dir: Path) -> None:
+        """Build critical artifacts first."""
+        # Implementation
+        pass
+```
+
+### Custom Output Directory
+
+```python
+from pathlib import Path
+from pyrig.rig.builders.base.base import BuilderConfigFile
+
+class CustomOutputBuilder(BuilderConfigFile):
+    """Builder with custom output directory."""
+    
+    @classmethod
+    def dist_dir_name(cls) -> str:
+        """Use custom output directory."""
+        return "artifacts"
+    
+    def create_artifacts(self, temp_artifacts_dir: Path) -> None:
+        # Implementation
+        pass
+
+# Creates artifacts in: artifacts/ instead of dist/
+```
+
+## Testing Builders
+
+```python
+import pytest
+from pathlib import Path
+from myproject.rig.builders.mybuilder import MyBuilder
+
+def test_builder_creates_artifacts(tmp_path: Path):
+    """Test artifact creation."""
+    builder = MyBuilder()
+    builder.create_artifacts(tmp_path)
+    
+    # Check artifacts were created
+    assert (tmp_path / "myapp.exe").exists()
+    assert (tmp_path / "myapp.exe").stat().st_size > 0
+
+def test_platform_specific_name():
+    """Test platform-specific naming."""
+    builder = MyBuilder()
+    artifact = Path("myapp.exe")
+    
+    name = builder.platform_specific_name(artifact)
+    
+    # Name should include platform
+    import platform
+    expected_suffix = platform.system()
+    assert expected_suffix in name
+    assert name == f"myapp-{expected_suffix}.exe"
+```
+
+## Best Practices
+
+1. **Clean builds**: Use `--clean` or equivalent to ensure reproducible builds
+2. **Error handling**: Check subprocess return codes and handle build failures
+3. **Resource bundling**: Use `additional_resource_packages()` for all runtime resources
+4. **Icon formats**: Provide PNG icon and let framework handle conversion
+5. **Platform testing**: Test on all target platforms before release
+6. **Artifact validation**: Verify artifacts are executable/usable after build
+7. **Dependencies**: Document required build tools (PyInstaller, compilers, etc.)
+8. **Temporary cleanup**: Framework handles temp directory cleanup automatically
+9. **Priority**: Set appropriate priority if build order matters
+10. **Output location**: Use default `dist/` unless there's a strong reason to change
+
+## Platform-Specific Considerations
+
+### Windows
+- Icon format: ICO
+- Executable extension: .exe
+- Console vs. GUI: Use `--noconsole` for GUI applications
+
+### macOS
+- Icon format: ICNS
+- Executable: No extension (Unix executable)
+- Code signing: Consider signing executables for distribution
+
+### Linux
+- Icon format: PNG
+- Executable: No extension (Unix executable)
+- Permissions: Ensure executable bit is set
+
+## Related APIs
+
+- [CLI API](/api/cli) - For command-line interface framework
+- [Configuration API](/api/configs) - For managing project configuration files
+- [Tools API](/api/tools) - For CLI tool wrappers

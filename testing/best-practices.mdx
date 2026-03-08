@@ -1,0 +1,653 @@
+---
+title: Testing Best Practices
+description: Best practices and patterns for testing pyrig projects
+---
+
+## Overview
+
+This guide covers best practices for writing effective tests in pyrig projects, including fixture usage, test organization, and common patterns.
+
+## Test Structure
+
+### Follow Naming Conventions
+
+Always follow pyrig's naming conventions:
+
+```python
+# Source: myapp/pyrig/src/calculator.py
+def add(a: int, b: int) -> int:
+    return a + b
+
+class Calculator:
+    def multiply(self, a: int, b: int) -> int:
+        return a * b
+
+# Test: tests/test_myapp/test_pyrig/test_src/test_calculator.py
+def test_add() -> None:
+    """Test add function."""
+    from myapp.pyrig.src.calculator import add
+    assert add(2, 3) == 5
+
+class TestCalculator:
+    """Test Calculator class."""
+    
+    def test_multiply(self) -> None:
+        """Test multiply method."""
+        from myapp.pyrig.src.calculator import Calculator
+        calc = Calculator()
+        assert calc.multiply(4, 5) == 20
+```
+
+### One Test Module Per Source Module
+
+Mirror source structure in tests:
+
+```
+myapp/
+  pyrig/
+    src/
+      calculator.py
+      database.py
+      utils.py
+  tests/
+    test_myapp/
+      test_pyrig/
+        test_src/
+          test_calculator.py
+          test_database.py
+          test_utils.py
+```
+
+### Group Related Tests
+
+Organize related tests in classes:
+
+```python
+class TestCalculatorBasicOps:
+    """Test basic calculator operations."""
+    
+    def test_add(self) -> None:
+        """Test addition."""
+        # ...
+    
+    def test_subtract(self) -> None:
+        """Test subtraction."""
+        # ...
+
+class TestCalculatorAdvancedOps:
+    """Test advanced calculator operations."""
+    
+    def test_power(self) -> None:
+        """Test exponentiation."""
+        # ...
+    
+    def test_root(self) -> None:
+        """Test square root."""
+        # ...
+```
+
+## Using Fixtures
+
+### Use Built-in Fixtures
+
+Pyrig provides several useful fixtures:
+
+```python
+import pytest
+from pathlib import Path
+
+def test_file_operations(tmp_path: Path) -> None:
+    """Test using tmp_path fixture."""
+    file = tmp_path / "test.txt"
+    file.write_text("content")
+    assert file.exists()
+```
+
+### The config_file_factory Fixture
+
+Use `config_file_factory` to test ConfigFile subclasses:
+
+```python
+from pathlib import Path
+from collections.abc import Callable
+from pyrig.rig.configs.base.base import ConfigFile
+from myapp.rig.configs.my_config import MyConfig
+
+def test_my_config(
+    config_file_factory: Callable[[type[ConfigFile]], type[ConfigFile]],
+    tmp_path: Path
+) -> None:
+    """Test custom config file."""
+    # Create test version that uses tmp_path
+    TestMyConfig = config_file_factory(MyConfig)
+    
+    # Test validation
+    TestMyConfig().validate()
+    assert TestMyConfig().path().exists()
+    
+    # Test loading
+    config = TestMyConfig().load()
+    assert config is not None
+    
+    # Test dumping
+    TestMyConfig().dump(config)
+    assert TestMyConfig().path().exists()
+```
+
+### Create Custom Fixtures
+
+Create reusable fixtures for common setup:
+
+```python
+import pytest
+from pathlib import Path
+from myapp.pyrig.src.database import Database
+
+@pytest.fixture
+def db(tmp_path: Path) -> Database:
+    """Create a test database."""
+    db = Database(tmp_path / "test.db")
+    db.create_tables()
+    return db
+
+@pytest.fixture
+def db_with_data(db: Database) -> Database:
+    """Create a test database with sample data."""
+    db.insert("users", {"name": "Alice", "age": 30})
+    db.insert("users", {"name": "Bob", "age": 25})
+    return db
+
+class TestDatabase:
+    """Test Database class."""
+    
+    def test_create_tables(self, db: Database) -> None:
+        """Test table creation."""
+        assert db.table_exists("users")
+    
+    def test_query(self, db_with_data: Database) -> None:
+        """Test querying data."""
+        users = db_with_data.query("users", {"age": 30})
+        assert len(users) == 1
+        assert users[0]["name"] == "Alice"
+```
+
+### Fixture Scope
+
+Choose appropriate fixture scope:
+
+```python
+import pytest
+
+# Function scope (default) - runs for each test
+@pytest.fixture
+def temp_data() -> dict:
+    return {"key": "value"}
+
+# Class scope - runs once per test class
+@pytest.fixture(scope="class")
+def shared_resource():
+    resource = create_expensive_resource()
+    yield resource
+    resource.cleanup()
+
+# Module scope - runs once per test module
+@pytest.fixture(scope="module")
+def module_setup():
+    setup_module_state()
+    yield
+    teardown_module_state()
+
+# Session scope - runs once per test session
+@pytest.fixture(scope="session")
+def session_config():
+    return load_test_config()
+```
+
+## Testing Builders
+
+### Basic Builder Test
+
+```python
+from pathlib import Path
+from collections.abc import Callable
+from pyrig.rig.builders.base.base import BuilderConfigFile
+
+def test_my_builder(
+    config_file_factory: Callable[[type[BuilderConfigFile]], type[BuilderConfigFile]],
+    tmp_path: Path
+) -> None:
+    """Test custom builder."""
+    from myapp.rig.builders.my_builder import MyBuilder
+    
+    # Create test builder
+    TestMyBuilder = config_file_factory(MyBuilder)
+    
+    # Trigger build
+    TestMyBuilder().validate()
+    
+    # Check artifacts
+    artifacts = TestMyBuilder().load()
+    assert len(artifacts) > 0
+    assert all(artifact.exists() for artifact in artifacts)
+```
+
+### Testing PyInstaller Builders
+
+```python
+import pytest
+from pathlib import Path
+from types import ModuleType
+from collections.abc import Callable
+from pytest_mock import MockerFixture
+from pyrig.rig.builders.pyinstaller import PyInstallerBuilder
+
+@pytest.fixture
+def test_pyinstaller_builder(
+    config_file_factory: Callable[[type[PyInstallerBuilder]], type[PyInstallerBuilder]],
+    tmp_path: Path
+) -> type[PyInstallerBuilder]:
+    """Create test PyInstaller builder."""
+    
+    class TestBuilder(config_file_factory(PyInstallerBuilder)):  # type: ignore
+        
+        def additional_resource_packages(self) -> list[ModuleType]:
+            return []
+        
+        def app_icon_png_path(self) -> Path:
+            # Create test icon
+            icon = tmp_path / "icon.png"
+            from PIL import Image
+            img = Image.new("RGB", (256, 256), (255, 0, 0))
+            img.save(icon)
+            return icon
+    
+    return TestBuilder
+
+def test_pyinstaller_options(
+    test_pyinstaller_builder: type[PyInstallerBuilder],
+    tmp_path: Path
+) -> None:
+    """Test PyInstaller options."""
+    options = test_pyinstaller_builder().pyinstaller_options(tmp_path)
+    assert "--onefile" in options
+    assert "--noconsole" in options
+    assert "--name" in options
+
+def test_create_artifacts(
+    test_pyinstaller_builder: type[PyInstallerBuilder],
+    mocker: MockerFixture,
+    tmp_path: Path
+) -> None:
+    """Test artifact creation (mock PyInstaller run)."""
+    # Mock PyInstaller to avoid actual build
+    mock_run = mocker.patch("pyrig.rig.builders.pyinstaller.run")
+    
+    # Trigger build
+    test_pyinstaller_builder().create_artifacts(tmp_path)
+    
+    # Verify PyInstaller was called
+    mock_run.assert_called_once()
+```
+
+## Test Assertions
+
+### Clear Assertions
+
+Use clear, specific assertions:
+
+```python
+# Good: Specific assertion
+def test_calculate_total() -> None:
+    result = calculate_total([1, 2, 3])
+    assert result == 6, f"Expected 6, got {result}"
+
+# Better: Multiple specific assertions
+def test_user_creation() -> None:
+    user = create_user("Alice", 30)
+    assert user.name == "Alice"
+    assert user.age == 30
+    assert user.created_at is not None
+```
+
+### Testing Exceptions
+
+```python
+import pytest
+
+def test_division_by_zero() -> None:
+    """Test that division by zero raises ValueError."""
+    with pytest.raises(ValueError, match="Cannot divide by zero"):
+        divide(10, 0)
+
+def test_invalid_input() -> None:
+    """Test that invalid input raises TypeError."""
+    with pytest.raises(TypeError):
+        process_data(None)
+```
+
+### Testing Collections
+
+```python
+def test_list_contents() -> None:
+    """Test list operations."""
+    result = get_users()
+    
+    # Check length
+    assert len(result) == 3
+    
+    # Check membership
+    assert "Alice" in [u.name for u in result]
+    
+    # Check all items
+    assert all(u.age >= 18 for u in result)
+
+def test_dict_structure() -> None:
+    """Test dictionary structure."""
+    result = get_config()
+    
+    # Check keys
+    assert "database" in result
+    assert "cache" in result
+    
+    # Check values
+    assert result["database"]["host"] == "localhost"
+    assert isinstance(result["cache"]["ttl"], int)
+```
+
+## Mocking
+
+### Using pytest-mock
+
+```python
+from pytest_mock import MockerFixture
+
+def test_api_call(mocker: MockerFixture) -> None:
+    """Test API call with mock."""
+    # Mock the requests.get function
+    mock_get = mocker.patch("requests.get")
+    mock_get.return_value.json.return_value = {"status": "ok"}
+    
+    # Call function that uses requests.get
+    result = fetch_data("https://api.example.com")
+    
+    # Verify mock was called correctly
+    mock_get.assert_called_once_with("https://api.example.com")
+    assert result["status"] == "ok"
+```
+
+### Mocking Methods
+
+```python
+def test_database_save(mocker: MockerFixture) -> None:
+    """Test database save with mock."""
+    from myapp.pyrig.src.database import Database
+    
+    # Create real database instance
+    db = Database(":memory:")
+    
+    # Mock the execute method
+    mock_execute = mocker.patch.object(db, "execute")
+    
+    # Call method that uses execute
+    db.save_user({"name": "Alice"})
+    
+    # Verify execute was called
+    mock_execute.assert_called_once()
+```
+
+### Spying on Functions
+
+```python
+def test_caching(mocker: MockerFixture) -> None:
+    """Test that caching works."""
+    from myapp.pyrig.src.cache import expensive_function
+    
+    # Spy on the function
+    spy = mocker.spy(expensive_function.__module__, expensive_function.__name__)
+    
+    # Call twice
+    result1 = expensive_function(42)
+    result2 = expensive_function(42)
+    
+    # Verify called only once (cached)
+    assert spy.call_count == 1
+    assert result1 == result2
+```
+
+## Test Organization
+
+### Use Markers
+
+Mark tests with categories:
+
+```python
+import pytest
+
+@pytest.mark.slow
+def test_slow_operation() -> None:
+    """Test that takes a long time."""
+    # ...
+
+@pytest.mark.integration
+def test_database_integration() -> None:
+    """Test database integration."""
+    # ...
+
+@pytest.mark.unit
+def test_pure_function() -> None:
+    """Test pure function."""
+    # ...
+```
+
+Run specific markers:
+
+```bash
+# Run only unit tests
+uv run pytest -m unit
+
+# Skip slow tests
+uv run pytest -m "not slow"
+```
+
+### Parametrize Tests
+
+Test multiple inputs with parametrize:
+
+```python
+import pytest
+
+@pytest.mark.parametrize("a,b,expected", [
+    (2, 3, 5),
+    (0, 0, 0),
+    (-1, 1, 0),
+    (10, -5, 5),
+])
+def test_add(a: int, b: int, expected: int) -> None:
+    """Test addition with various inputs."""
+    from myapp.pyrig.src.calculator import add
+    assert add(a, b) == expected
+
+@pytest.mark.parametrize("input,expected", [
+    ("", True),
+    ("a", False),
+    ("aba", True),
+    ("abba", True),
+    ("abc", False),
+])
+def test_is_palindrome(input: str, expected: bool) -> None:
+    """Test palindrome detection."""
+    from myapp.pyrig.src.utils import is_palindrome
+    assert is_palindrome(input) == expected
+```
+
+## Test Data
+
+### Use tmp_path for Files
+
+Always use `tmp_path` for file operations:
+
+```python
+from pathlib import Path
+
+def test_file_creation(tmp_path: Path) -> None:
+    """Test file creation."""
+    file = tmp_path / "test.txt"
+    file.write_text("content")
+    
+    assert file.exists()
+    assert file.read_text() == "content"
+```
+
+### Create Test Data Files
+
+Create test data in fixtures:
+
+```python
+import pytest
+import json
+from pathlib import Path
+
+@pytest.fixture
+def test_config_file(tmp_path: Path) -> Path:
+    """Create a test config file."""
+    config = {
+        "database": {
+            "host": "localhost",
+            "port": 5432,
+        },
+        "cache": {
+            "enabled": True,
+            "ttl": 3600,
+        },
+    }
+    
+    config_file = tmp_path / "config.json"
+    config_file.write_text(json.dumps(config))
+    return config_file
+
+def test_load_config(test_config_file: Path) -> None:
+    """Test loading config file."""
+    from myapp.pyrig.src.config import load_config
+    
+    config = load_config(test_config_file)
+    assert config["database"]["host"] == "localhost"
+```
+
+## Common Patterns
+
+### Testing main.py Entry Point
+
+Use the `main_test_fixture`:
+
+```python
+# tests/test_myapp/test_main.py
+
+def test_main(main_test_fixture: None) -> None:
+    """Test main entry point."""
+    pass  # Fixture does the testing
+```
+
+### Testing ConfigFile Subclasses
+
+Use `config_file_factory`:
+
+```python
+from collections.abc import Callable
+from pathlib import Path
+from pyrig.rig.configs.base.base import ConfigFile
+
+def test_config_lifecycle(
+    config_file_factory: Callable[[type[ConfigFile]], type[ConfigFile]],
+) -> None:
+    """Test complete config file lifecycle."""
+    from myapp.rig.configs.my_config import MyConfig
+    
+    TestConfig = config_file_factory(MyConfig)
+    config = TestConfig()
+    
+    # Test validation creates file
+    config.validate()
+    assert config.path().exists()
+    
+    # Test loading
+    data = config.load()
+    assert data is not None
+    
+    # Test modification
+    modified_data = modify_data(data)
+    config.dump(modified_data)
+    
+    # Test reload
+    reloaded = config.load()
+    assert reloaded == modified_data
+```
+
+### Testing Async Code
+
+```python
+import pytest
+
+@pytest.mark.asyncio
+async def test_async_function() -> None:
+    """Test async function."""
+    from myapp.pyrig.src.async_ops import fetch_data
+    
+    result = await fetch_data("https://api.example.com")
+    assert result["status"] == "ok"
+```
+
+## Running Tests
+
+### Run All Tests
+
+```bash
+uv run pytest
+```
+
+### Run Specific Tests
+
+```bash
+# Run tests in a file
+uv run pytest tests/test_myapp/test_src/test_calculator.py
+
+# Run a specific test
+uv run pytest tests/test_myapp/test_src/test_calculator.py::test_add
+
+# Run tests matching a pattern
+uv run pytest -k "test_add"
+```
+
+### Run with Coverage
+
+```bash
+# Run with coverage report
+uv run pytest --cov
+
+# Generate HTML coverage report
+uv run pytest --cov --cov-report=html
+open htmlcov/index.html
+```
+
+### Run with Verbose Output
+
+```bash
+# Show test names and results
+uv run pytest -v
+
+# Show print statements
+uv run pytest -s
+
+# Show both
+uv run pytest -vs
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Test Structure" icon="folder-tree" href="/testing/structure">
+    Learn about test organization
+  </Card>
+  <Card title="Autouse Fixtures" icon="magic" href="/testing/autouse-fixtures">
+    Understand automatic test validation
+  </Card>
+</CardGroup>

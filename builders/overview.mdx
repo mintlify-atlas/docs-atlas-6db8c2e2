@@ -1,0 +1,170 @@
+---
+title: Builders Overview
+description: Create distributable artifacts with pyrig's builder system
+---
+
+## What are Builders?
+
+Builders are specialized configuration file handlers that create build artifacts (executables, documentation, packages, etc.) rather than configuration files. The builder system provides a framework for creating platform-specific artifacts with organized output and automatic cleanup.
+
+## How Builders Work
+
+Builders extend the `BuilderConfigFile` base class and repurpose the configuration file interface for build operations:
+
+- **`load()`** - Returns existing artifacts from the output directory
+- **`dump()`** - Triggers the build process
+- **`create_file()`** - Creates the output directory structure
+- **`create_artifacts()`** - Defines the build logic (implemented by subclasses)
+
+## Build Lifecycle
+
+When you run `pyrig build`, each builder goes through this lifecycle:
+
+1. **Create temporary directory** - A temp directory is created for intermediate files
+2. **Call `create_artifacts()`** - Subclass implements the build logic here
+3. **Collect artifacts** - All files in the temp directory are collected
+4. **Rename with platform suffixes** - Artifacts get names like `myapp-Linux.exe`, `myapp-Windows.exe`
+5. **Move to output directory** - Artifacts are moved to `dist/` (or custom directory)
+6. **Clean up** - Temporary directory is automatically removed
+
+## BuilderConfigFile Base Class
+
+The `BuilderConfigFile` class provides the foundation for all builders:
+
+```python
+from pathlib import Path
+from pyrig.rig.builders.base.base import BuilderConfigFile
+
+class MyBuilder(BuilderConfigFile):
+    
+    def create_artifacts(self, temp_artifacts_dir: Path) -> None:
+        """Create artifacts in the temporary directory."""
+        output = temp_artifacts_dir / "my_app.exe"
+        # ... build logic ...
+        output.write_bytes(b"executable content")
+```
+
+### Key Methods
+
+#### Required Implementation
+
+<ResponseField name="create_artifacts" type="method" required>
+  Create artifacts in the temporary directory. All files created here will be automatically collected, renamed with platform suffixes, and moved to the final output directory.
+  
+  **Args:**
+  - `temp_artifacts_dir` (Path): Temporary directory where artifacts should be created
+</ResponseField>
+
+#### Available Methods
+
+<ResponseField name="dist_dir_name" type="classmethod">
+  Get the name of the artifacts directory. Default is `"dist"`, but can be overridden.
+  
+  **Returns:** str - Name of the artifacts directory
+</ResponseField>
+
+<ResponseField name="app_name" type="method">
+  Get the application name from `pyproject.toml`.
+  
+  **Returns:** str - Project name
+</ResponseField>
+
+<ResponseField name="root_path" type="method">
+  Get the absolute path to the project root directory.
+  
+  **Returns:** Path - Project root path
+</ResponseField>
+
+<ResponseField name="main_path" type="method">
+  Get the absolute path to the `main.py` entry point.
+  
+  **Returns:** Path - Path to main.py
+</ResponseField>
+
+<ResponseField name="resources_path" type="method">
+  Get the absolute path to the resources directory.
+  
+  **Returns:** Path - Path to resources directory
+</ResponseField>
+
+<ResponseField name="src_package_path" type="method">
+  Get the absolute path to the source package directory.
+  
+  **Returns:** Path - Path to source package
+</ResponseField>
+
+## Platform-Specific Naming
+
+Builders automatically add platform-specific suffixes to artifacts:
+
+- **Linux**: `myapp-Linux.exe`
+- **Windows**: `myapp-Windows.exe`
+- **macOS**: `myapp-Darwin.exe`
+
+This allows you to build artifacts for multiple platforms and distribute them together without naming conflicts.
+
+## Example: Simple Builder
+
+Here's a complete example of a basic builder:
+
+```python
+from pathlib import Path
+from pyrig.rig.builders.base.base import BuilderConfigFile
+
+class DocumentationBuilder(BuilderConfigFile):
+    """Builder that creates a documentation archive."""
+    
+    def create_artifacts(self, temp_artifacts_dir: Path) -> None:
+        """Create documentation archive."""
+        import shutil
+        
+        # Create docs archive
+        output = temp_artifacts_dir / f"{self.app_name()}-docs.zip"
+        
+        # Archive the docs directory
+        docs_dir = self.root_path() / "docs"
+        shutil.make_archive(
+            str(output.with_suffix('')),
+            'zip',
+            docs_dir
+        )
+```
+
+Place this in `pyrig/rig/builders/documentation.py` and run:
+
+```bash
+uv run pyrig build
+```
+
+This will create `dist/myapp-docs-Linux.zip` (or Windows/Darwin variant).
+
+## Custom Output Directory
+
+Override `dist_dir_name()` to change the output directory:
+
+```python
+class MyBuilder(BuilderConfigFile):
+    
+    @classmethod
+    def dist_dir_name(cls) -> str:
+        return "artifacts"  # Output to artifacts/ instead of dist/
+    
+    def create_artifacts(self, temp_artifacts_dir: Path) -> None:
+        # ... build logic ...
+        pass
+```
+
+## Automatic Discovery
+
+Builders are automatically discovered when placed in `pyrig/rig/builders/`. You can also place them in the equivalent location in any package that depends on pyrig.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="PyInstaller Integration" icon="box" href="/builders/pyinstaller">
+    Create standalone executables with PyInstaller
+  </Card>
+  <Card title="Custom Builders" icon="hammer" href="/builders/custom-builders">
+    Learn how to create your own custom builders
+  </Card>
+</CardGroup>

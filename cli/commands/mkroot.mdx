@@ -1,0 +1,235 @@
+---
+title: pyrig mkroot
+description: Create or update project configuration files and directory structure
+---
+
+## Overview
+
+The `mkroot` command discovers all `ConfigFile` subclasses across the project and its dependencies, then validates each one to create or update configuration files. It generates the complete project structure including `pyproject.toml`, `.gitignore`, GitHub workflows, pre-commit hooks, and other configuration files.
+
+```bash
+uv run pyrig mkroot
+```
+
+## What It Does
+
+The command:
+
+1. **Discovers** all `ConfigFile` subclasses in your project and its dependencies
+2. **Validates** each config file (triggering generation via `dump()`)
+3. **Creates or updates** configuration files on disk
+4. **Respects opt-out markers** - won't overwrite files marked for manual management
+5. **Ensures directory structure** - creates parent directories as needed
+
+<Note>
+  The command is **idempotent**: safe to run multiple times. It overwrites incorrect files but respects opt-out markers.
+</Note>
+
+## Usage
+
+### Basic Usage
+
+```bash
+uv run pyrig mkroot
+```
+
+### After Modifying Config Classes
+
+```bash
+# 1. Update a ConfigFile subclass
+# 2. Regenerate configs
+uv run pyrig mkroot
+
+# 3. Sync environment to apply new configs
+uv sync
+```
+
+### With Verbose Output
+
+```bash
+# See which files are being created/updated
+uv run pyrig -v mkroot
+
+# See module-level details
+uv run pyrig -vv mkroot
+```
+
+### Quiet Mode
+
+```bash
+# Only show warnings and errors
+uv run pyrig -q mkroot
+```
+
+## Generated Files
+
+The command generates comprehensive project configuration:
+
+### Python Configuration
+
+- `pyproject.toml` - Project metadata, dependencies, tool configs
+- `.python-version` - Python version specification
+- `uv.lock` - Locked dependencies
+
+### Version Control
+
+- `.gitignore` - Git ignore patterns
+- `.gitattributes` - Git file attributes
+
+### Code Quality
+
+- `.pre-commit-config.yaml` - Pre-commit hook configuration
+- `ruff.toml` - Ruff linter/formatter settings
+- `.bandit` - Security scanner configuration
+
+### CI/CD
+
+- `.github/workflows/health_check.yml` - CI workflow
+- `.github/workflows/release.yml` - CD workflow
+- `.github/CODEOWNERS` - Code review assignments
+
+### Repository Management
+
+- `.github/ISSUE_TEMPLATE/` - Issue templates
+- `.github/PULL_REQUEST_TEMPLATE.md` - PR template
+- `branch-protection.json` - Branch protection rules
+
+### Development
+
+- `.scratch` - Temporary code execution file
+- `LICENSE` - Project license
+- `README.md` - Project documentation
+
+## Expected Output
+
+```bash
+$ uv run pyrig mkroot
+Discovering ConfigFile subclasses...
+Validating pyproject.toml...
+Validating .gitignore...
+Validating .github/workflows/health_check.yml...
+✓ Created/updated 15 configuration files
+```
+
+```bash
+$ uv run pyrig -v mkroot
+DEBUG: Discovered 15 ConfigFile subclasses
+DEBUG: Validating PyprojectConfigFile
+INFO: Writing pyproject.toml
+DEBUG: Validating GitignoreConfigFile
+INFO: Writing .gitignore
+...
+✓ Created/updated 15 configuration files
+```
+
+## Behavior
+
+<ParamField path="Discovery" type="automatic">
+  Automatically finds all `ConfigFile` subclasses across the entire dependency chain, from pyrig through your project.
+</ParamField>
+
+<ParamField path="Validation" type="automatic">
+  Each config file is validated, which triggers content generation and writing to disk.
+</ParamField>
+
+<ParamField path="Overwriting" type="intelligent">
+  - **Overwrites** files with incorrect content
+  - **Respects** opt-out markers (files marked for manual management)
+  - **Preserves** manual customizations in marked sections
+</ParamField>
+
+<ParamField path="Idempotency" type="guaranteed">
+  Safe to run multiple times. Running again produces the same result unless configs changed.
+</ParamField>
+
+## When to Use
+
+### Use `mkroot` When:
+
+- You've modified a `ConfigFile` subclass and want to apply changes
+- You've added a new `ConfigFile` subclass
+- You want to ensure all configs are up-to-date
+- You're updating from a new version of pyrig
+- Configuration files were accidentally deleted or corrupted
+
+### Example Workflow
+
+```python
+# 1. Create a custom config file
+from pyrig.rig.configs.base.base import ConfigFile
+
+class CustomConfig(ConfigFile):
+    @classmethod
+    def path(cls) -> Path:
+        return Path('.custom-config')
+    
+    @classmethod
+    def content(cls) -> str:
+        return "my custom configuration"
+```
+
+```bash
+# 2. Generate the file
+uv run pyrig mkroot
+
+# Output:
+# Writing .custom-config
+# ✓ Created/updated 16 configuration files
+```
+
+## Opt-Out Markers
+
+To prevent `mkroot` from overwriting a file, add an opt-out marker:
+
+```python
+class MyConfigFile(ConfigFile):
+    @classmethod
+    def should_validate(cls) -> bool:
+        """Skip validation if file exists and has opt-out marker."""
+        if cls.path().exists():
+            content = cls.path().read_text()
+            if "# pyrig: manual" in content:
+                return False
+        return True
+```
+
+<Warning>
+  Files without opt-out protection will be overwritten if their content doesn't match the expected output. Always use version control to track changes.
+</Warning>
+
+## Config File Discovery
+
+The command discovers configs across your entire dependency chain:
+
+```
+pyrig (base configs)
+└── your-base-package (organizational defaults)
+    └── your-project (project-specific configs)
+```
+
+Configs in dependent packages override base configs through inheritance:
+
+```python
+# In your-project/rig/configs/custom_pyproject.py
+from pyrig.rig.configs.python.pyproject import PyprojectConfigFile
+
+class CustomPyproject(PyprojectConfigFile):
+    @classmethod
+    def content(cls) -> dict:
+        base = super().content()
+        base['project']['name'] = 'my-custom-name'
+        return base
+```
+
+## Related Commands
+
+- **[init](/cli/commands/init)** - Full project initialization (includes `mkroot`)
+- **[build](/cli/commands/build)** - Build artifacts using `BuilderConfigFile` subclasses
+
+## Implementation
+
+The `mkroot` command calls `ConfigFile.validate_all_subclasses()`, which discovers and validates all config file subclasses. See `pyrig/rig/cli/commands/create_root.py:10`.
+
+<Note>
+  Run `uv run pyrig mkroot --help` to see the command's built-in help text.
+</Note>

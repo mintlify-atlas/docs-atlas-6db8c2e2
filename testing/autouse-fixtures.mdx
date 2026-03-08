@@ -1,0 +1,500 @@
+---
+title: Autouse Fixtures
+description: Automatic test validation and project enforcement
+---
+
+## Overview
+
+Pyrig uses autouse fixtures to automatically validate project structure, enforce test coverage, and maintain code quality. These fixtures run automatically before and/or after every test session without requiring explicit imports.
+
+## What are Autouse Fixtures?
+
+Autouse fixtures are pytest fixtures with `autouse=True` that run automatically:
+
+```python
+@pytest.fixture(scope="session", autouse=True)
+def assert_no_unstaged_changes() -> Generator[None, None, None]:
+    """Verify no unstaged git changes before and after tests."""
+    # Runs before tests
+    check_git_status()
+    yield
+    # Runs after tests
+    check_git_status()
+```
+
+You don't need to import or use these fixtures - they run automatically when you run `pytest`.
+
+## Session-Scoped Fixtures
+
+All autouse fixtures run at session scope (once per test session) to validate project-wide concerns.
+
+## Available Autouse Fixtures
+
+### assert_no_unstaged_changes
+
+**Purpose**: Verify no unstaged git changes before and after tests (CI only)
+
+**When**: Before and after test session
+
+**Scope**: CI environments only (GitHub Actions)
+
+**What it checks**:
+- No unstaged changes before tests run
+- No unstaged changes after tests complete
+
+**Auto-fixes**: None
+
+**Fails if**: Any unstaged changes detected in CI
+
+**Example failure**:
+```
+AssertionError: Pyrig enforces that no changes are made during tests when running in CI.
+This is to ensure that the tests do not modify any files.
+Found the following unstaged changes:
+M pyproject.toml
+M pyrig/rig/configs/example.py
+```
+
+---
+
+### assert_root_is_correct
+
+**Purpose**: Verify project root structure and configuration files
+
+**When**: Before test session
+
+**What it checks**:
+- All ConfigFile subclasses are correct
+- Configuration files exist and are valid
+
+**Auto-fixes**: 
+- Creates missing configuration files
+- Updates incorrect configuration files
+
+**Fails if**: Configuration files were incorrect (after auto-fixing)
+
+**Example failure**:
+```
+AssertionError: Found incorrect ConfigFiles.
+Attempted correcting them automatically.
+Please verify the changes at the following paths.
+- pyproject.toml
+- .gitignore
+```
+
+---
+
+### assert_no_namespace_packages
+
+**Purpose**: Ensure all packages have `__init__.py` files
+
+**When**: Before test session
+
+**What it checks**:
+- Every directory with Python files has an `__init__.py`
+
+**Auto-fixes**:
+- Creates missing `__init__.py` files
+
+**Fails if**: Namespace packages were found (after auto-fixing)
+
+**Example failure**:
+```
+AssertionError: Pyrig enforces that all packages have __init__.py files.
+Found namespace packages.
+Created __init__.py files for them.
+Please verify the changes at the following paths:
+- myapp/pyrig/src/utils/__init__.py
+- myapp/pyrig/rig/tools/__init__.py
+```
+
+---
+
+### assert_all_src_code_in_one_package
+
+**Purpose**: Enforce single source package with specific structure
+
+**When**: Before test session
+
+**What it checks**:
+- Only expected top-level packages exist (source package and `tests`)
+- Source package has exactly `rig`, `src`, `resources` subpackages
+- Source package has exactly `main` module
+
+**Auto-fixes**: None
+
+**Fails if**: Unexpected packages, subpackages, or modules found
+
+**Example failure**:
+```
+AssertionError: Pyrig enforces a single source package with a specific structure.
+Found unexpected packages: {'utils', 'helpers'}
+Expected packages: {'tests', 'myapp'}
+Only folders with __init__.py files are considered packages.
+Please move all code and logic into the designated src package.
+```
+
+---
+
+### assert_src_package_correctly_named
+
+**Purpose**: Verify source package naming conventions
+
+**When**: Before test session
+
+**What it checks**:
+- Current directory name matches `pyproject.toml` project name
+- Source package name matches project name (kebab-case → snake_case)
+
+**Auto-fixes**: None
+
+**Fails if**: Naming mismatch detected
+
+**Example failure**:
+```
+AssertionError: Expected source package to be named my_app, but it is named myapp
+```
+
+---
+
+### assert_all_modules_tested
+
+**Purpose**: Ensure every source module has a corresponding test module
+
+**When**: Before test session
+
+**What it checks**:
+- Every source module has a test module
+- Every function has a test function
+- Every class has a test class
+- Every method has a test method
+
+**Auto-fixes**:
+- Generates test skeletons for missing tests
+- Creates test modules for untested source modules
+- Non-destructive: preserves existing tests
+
+**Fails if**: Any source modules lack tests (after auto-generating skeletons)
+
+**Example failure**:
+```
+AssertionError: Found incorrect test modules.
+Test skeletons were automatically created.
+- tests/test_myapp/test_pyrig/test_src/test_calculator.py
+- tests/test_myapp/test_pyrig/test_src/test_database.py
+```
+
+See [Test Structure](/testing/structure) for more details on test generation.
+
+---
+
+### assert_dependencies_are_up_to_date
+
+**Purpose**: Verify dependencies are current via `uv lock --upgrade` and `uv sync`
+
+**When**: Before test session
+
+**What it checks**:
+- Dependencies are up to date
+- Dependencies are installed
+
+**Auto-fixes**:
+- Runs `uv lock --upgrade`
+- Runs `uv sync`
+
+**Fails if**: Dependency update or sync fails
+
+**Skips if**: No internet connection available
+
+**Example failure**:
+```
+AssertionError: Dependencies are not up to date.
+Failed to update dependencies.
+This fixture ran `uv lock --upgrade` but it failed.
+Output:
+ERROR: Could not find a version that satisfies the requirement pyrig>=0.1.0
+```
+
+---
+
+### assert_src_runs_without_dev_deps
+
+**Purpose**: Verify source code doesn't depend on dev dependencies
+
+**When**: Before test session
+
+**What it checks**:
+- Source code can run without dev dependencies
+- All source modules can be imported
+- CLI entry point works
+
+**Auto-fixes**: None
+
+**Fails if**: Source code requires dev dependencies
+
+**Skips if**: No internet connection available
+
+**How it works**:
+1. Creates temporary environment
+2. Installs project without dev dependencies
+3. Imports all source modules
+4. Runs CLI with `--help`
+
+**Example failure**:
+```
+AssertionError: Source code cannot run without dev dependencies.
+This fixture created a temp environment and installed the project without
+the dev group and attempted to import all src modules.
+However, it failed with the following error:
+ModuleNotFoundError: No module named 'pytest'
+```
+
+---
+
+### assert_src_does_not_use_rig
+
+**Purpose**: Enforce separation between source code and rig code
+
+**When**: Before test session
+
+**What it checks**:
+- Source code (`src/`) doesn't import rig code (`rig/`)
+
+**Auto-fixes**: None
+
+**Fails if**: Any rig imports found in source code
+
+**Example failure**:
+```
+AssertionError: Found rig usage in src code,
+which violates the separation between src code and rig code.
+- myapp/pyrig/src/utils.py: from myapp.pyrig.rig.configs import MyConfig
+```
+
+---
+
+### assert_project_mgt_is_up_to_date
+
+**Purpose**: Verify `uv` is up to date
+
+**When**: Before test session
+
+**What it checks**:
+- `uv` package manager is current
+
+**Auto-fixes**:
+- Runs `uv self update`
+
+**Fails if**: Update command fails unexpectedly
+
+**Skips if**: 
+- No internet connection
+- Running in CI (GitHub Actions)
+- Rate limit exceeded (GitHub API)
+
+**Example failure**:
+```
+AssertionError: The tool uv is not up to date.
+This fixture ran `uv self update` but it failed.
+Output:
+ERROR: Failed to download uv update
+```
+
+## Auto-Fix Behavior
+
+Many autouse fixtures auto-fix issues and then fail:
+
+1. **Detect issue** - Fixture identifies a problem
+2. **Auto-fix** - Fixture attempts to fix the problem
+3. **Fail** - Fixture fails with a message listing what was fixed
+4. **Developer review** - You review and commit the changes
+5. **Re-run tests** - Tests pass on next run
+
+This ensures:
+- Issues are fixed automatically
+- You're aware of what changed
+- Changes are committed to version control
+
+## Disabling Autouse Fixtures
+
+### Disable Specific Fixtures
+
+You can disable specific autouse fixtures using pytest's `--deselect` option:
+
+```bash
+# Disable a specific fixture (not recommended)
+uv run pytest -p no:assert_all_modules_tested
+```
+
+**Warning**: Disabling autouse fixtures is not recommended as they enforce critical project standards.
+
+### Conditional Execution
+
+Some fixtures already have conditional execution:
+
+- **CI-only**: `assert_no_unstaged_changes`
+- **Internet required**: `assert_dependencies_are_up_to_date`, `assert_src_runs_without_dev_deps`, `assert_project_mgt_is_up_to_date`
+- **Local-only**: `assert_project_mgt_is_up_to_date` (skips in CI)
+
+## Creating Custom Autouse Fixtures
+
+Create your own autouse fixtures in your project's `tests/` directory:
+
+```python
+# tests/conftest.py or tests/fixtures/my_fixtures.py
+import pytest
+
+@pytest.fixture(scope="session", autouse=True)
+def assert_custom_validation() -> None:
+    """Verify custom project requirements."""
+    # Your validation logic
+    if not some_condition():
+        raise AssertionError("Custom validation failed")
+```
+
+Best practices:
+- Use `scope="session"` for project-wide validation
+- Add clear error messages
+- Auto-fix when possible
+- Document what the fixture checks
+
+## Fixture Discovery
+
+Autouse fixtures are discovered from:
+
+1. **pyrig's fixtures** - `pyrig.rig.tests.fixtures.autouse`
+2. **Dependent package fixtures** - Equivalent `fixtures.autouse` modules
+3. **Project fixtures** - Your project's `tests/` directory
+
+All fixtures are automatically registered via `pytest_plugins` in `tests/conftest.py`.
+
+## Understanding Fixture Output
+
+### Success
+
+When all autouse fixtures pass, pytest shows:
+
+```bash
+$ uv run pytest
+==================== test session starts ====================
+collected 42 items
+
+tests/test_myapp/test_src/test_calculator.py ......
+
+==================== 42 passed in 2.15s =====================
+```
+
+### Failure
+
+When an autouse fixture fails, pytest shows:
+
+```bash
+$ uv run pytest
+==================== test session starts ====================
+collected 42 items
+
+tests/test_myapp/test_src/test_calculator.py 
+ERROR at setup of session scope fixture 'assert_all_modules_tested'
+
+E   AssertionError: Found incorrect test modules.
+E   Test skeletons were automatically created.
+E   - tests/test_myapp/test_src/test_database.py
+```
+
+## Best Practices
+
+### 1. Review Auto-Fixed Changes
+
+When a fixture auto-fixes an issue:
+
+```bash
+# 1. Review changes
+git diff
+
+# 2. Run tests again
+uv run pytest
+
+# 3. Commit if correct
+git add -A
+git commit -m "Fix issues detected by autouse fixtures"
+```
+
+### 2. Understand Fixture Purpose
+
+Read the fixture docstring to understand what it checks:
+
+```python
+@pytest.fixture(scope="session", autouse=True)
+def assert_all_modules_tested() -> None:
+    """Verify every source module has a corresponding test module.
+    
+    Auto-generates test skeletons for missing test modules/packages.
+    
+    Raises:
+        AssertionError: If any source modules lack corresponding tests.
+    """
+```
+
+### 3. Fix Root Causes
+
+Don't just delete auto-generated files - fix the root cause:
+
+```bash
+# Bad: Delete generated test
+rm tests/test_myapp/test_src/test_calculator.py
+
+# Good: Implement the test
+# Edit tests/test_myapp/test_src/test_calculator.py and add real tests
+```
+
+### 4. Use in CI
+
+Autouse fixtures are perfect for CI validation:
+
+```yaml
+# .github/workflows/test.yml
+name: Test
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Run tests
+        run: uv run pytest
+```
+
+This ensures:
+- No unstaged changes during tests
+- All modules are tested
+- Dependencies are current
+- Source doesn't depend on dev dependencies
+
+## Fixture Locations
+
+Pyrig's autouse fixtures are located in:
+
+```
+pyrig/
+  rig/
+    tests/
+      fixtures/
+        autouse/
+          __init__.py
+          session.py    # Session-scoped autouse fixtures
+```
+
+Source: `pyrig/rig/tests/fixtures/autouse/session.py:1`
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Test Structure" icon="folder-tree" href="/testing/structure">
+    Learn about test organization
+  </Card>
+  <Card title="Best Practices" icon="star" href="/testing/best-practices">
+    Testing best practices and patterns
+  </Card>
+</CardGroup>

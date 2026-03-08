@@ -1,0 +1,506 @@
+---
+title: Extending pyrig
+description: Learn how to create a personal pyrig package and extend pyrig's behavior using the .I pattern and multi-package inheritance
+---
+
+## Overview
+
+pyrig's most powerful feature is its **multi-package inheritance** architecture. You can create a personal pyrig package with your own standards, add it as a dependency to any project, and have `pyrig init` automatically apply everything — configs, tools, CLI commands, and builders.
+
+This guide shows you how to:
+- Create a personal pyrig package
+- Override default behaviors using the `.I` pattern
+- Understand dependency chain discovery
+- Package and distribute your extensions
+
+## Understanding the `.I` Pattern
+
+The `.I` pattern is pyrig's mechanism for automatic subclass discovery and instantiation. It stands for **Instance** and provides access to the final (leaf) implementation in the dependency chain.
+
+### How It Works
+
+Every extensible class in pyrig inherits from `DependencySubclass`, which provides:
+
+```python
+from pyrig.src.subclass import DependencySubclass
+
+class Tool(DependencySubclass):
+    @classmethod
+    def definition_package(cls) -> ModuleType:
+        """Package where subclasses are defined."""
+        return tools
+    
+    @classmethod
+    def sorting_key(cls, subclass: type[Self]) -> Any:
+        """Sort key for ordering subclasses."""
+        return subclass().name()
+```
+
+When you call `ToolName.I`, pyrig:
+
+1. **Discovers** all packages that depend on pyrig
+2. **Searches** for `ToolName` subclasses in `<package>.rig.tools`
+3. **Validates** that exactly one leaf subclass exists
+4. **Returns** an instance of that subclass
+
+### Example: Using `.I`
+
+```python
+from pyrig.rig.tools.linter import Linter
+from pyrig.rig.tools.package_manager import PackageManager
+
+# Get the final implementation (could be yours!)
+linter = Linter.I
+package_manager = PackageManager.I
+
+# Use it
+linter.check_args().run()
+package_manager.install_dependencies_args().run()
+```
+
+## Creating a Personal pyrig Package
+
+A personal pyrig package lets you standardize your workflow across all projects.
+
+### Step 1: Initialize Your Package
+
+```bash
+mkdir my-pyrig
+cd my-pyrig
+uv init
+uv add pyrig
+```
+
+### Step 2: Create the Extension Structure
+
+Create the required directory structure:
+
+```bash
+mkdir -p my_pyrig/rig/tools
+mkdir -p my_pyrig/rig/configs
+mkdir -p my_pyrig/rig/cli/subcommands
+touch my_pyrig/__init__.py
+touch my_pyrig/rig/__init__.py
+touch my_pyrig/rig/tools/__init__.py
+touch my_pyrig/rig/configs/__init__.py
+touch my_pyrig/rig/cli/__init__.py
+touch my_pyrig/rig/cli/subcommands/__init__.py
+```
+
+The structure should mirror pyrig's:
+
+```
+my_pyrig/
+├── rig/
+│   ├── tools/          # Tool overrides
+│   ├── configs/        # Config overrides
+│   ├── cli/
+│   │   └── subcommands/  # Custom CLI commands
+│   └── builders/       # Custom builders (optional)
+└── src/                # Shared utilities (optional)
+```
+
+### Step 3: Override a Tool
+
+Create `my_pyrig/rig/tools/linter.py`:
+
+```python
+from pyrig.rig.tools.linter import Linter as PyrigLinter
+from pyrig.src.processes import Args
+
+class Linter(PyrigLinter):
+    """Custom linter with organization-specific settings."""
+    
+    def check_args(self, *args: str) -> Args:
+        """Always check with strict mode."""
+        return super().check_args("--select", "ALL", *args)
+    
+    def format_args(self, *args: str) -> Args:
+        """Format with 100-character line length."""
+        return self.args("format", "--line-length", "100", *args)
+```
+
+Now when any project uses `Linter.I` with your package installed, it will use **your** implementation!
+
+### Step 4: Add a Custom Config
+
+Create `my_pyrig/rig/configs/company_config.py`:
+
+```python
+from pathlib import Path
+from pyrig.rig.configs.base.toml import TomlConfigFile
+from pyrig.rig.configs.base.base import Priority
+
+class CompanyConfig(TomlConfigFile):
+    """Company-specific configuration."""
+    
+    def parent_path(self) -> Path:
+        """Place in project root."""
+        return Path()
+    
+    def _configs(self) -> dict:
+        """Required configuration."""
+        return {
+            "company": {
+                "name": "Acme Corp",
+                "team": "Platform",
+                "oncall": "platform-oncall@acme.com"
+            }
+        }
+    
+    def priority(self) -> float:
+        """Validate after pyproject.toml."""
+        return Priority.MEDIUM
+```
+
+When `pyrig init` or `pyrig mkroot` runs, this config will be automatically discovered and validated!
+
+### Step 5: Add a Custom CLI Command
+
+Create `my_pyrig/rig/cli/subcommands/deploy.py`:
+
+```python
+import typer
+from pyrig.rig.tools.package_manager import PackageManager
+
+def deploy(
+    environment: str = typer.Argument(..., help="Deployment environment"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be deployed"),
+) -> None:
+    """Deploy the project to the specified environment."""
+    typer.echo(f"Deploying to {environment}...")
+    
+    if dry_run:
+        typer.echo("Dry run - no actual deployment")
+        return
+    
+    # Build and publish
+    PackageManager.I.build_args().run()
+    typer.echo(f"Deployed to {environment}!")
+```
+
+This command is automatically discovered and added to all projects that depend on your package:
+
+```bash
+uv run my-project deploy production
+```
+
+## Dependency Chain Discovery
+
+pyrig uses `DependencyGraph` to discover all packages in the dependency chain. Here's how it works:
+
+### Discovery Algorithm
+
+1. **Build Dependency Graph**: Parse all installed packages and their dependencies
+2. **Find Dependents**: Identify all packages that depend on `pyrig`
+3. **Topological Sort**: Order packages from base (pyrig) to leaves (your project)
+4. **Discover Subclasses**: For each package, search `<package>.rig.<category>` for subclasses
+
+### Example Chain
+
+```
+pyrig (base)
+  ↓
+my-pyrig (your standards)
+  ↓
+my-project (specific overrides)
+```
+
+When `my-project` calls `Linter.I`:
+
+1. Searches `pyrig.rig.tools.linter` → finds base `Linter`
+2. Searches `my_pyrig.rig.tools.linter` → finds your `Linter` (overrides base)
+3. Searches `my_project.rig.tools.linter` → if exists, overrides yours
+4. Returns the final (leaf) implementation
+
+### The `.L` Property
+
+The `.L` property (Leaf) returns the class, not an instance:
+
+```python
+# Get the class
+LinterClass = Linter.L  # type: type[Linter]
+
+# Get an instance
+linter = Linter.I  # type: Linter
+
+# Equivalent to:
+linter = Linter.L()
+```
+
+## Overriding Default Behaviors
+
+### Override Tool Commands
+
+Extend or modify any tool's behavior:
+
+```python
+from pyrig.rig.tools.project_tester import ProjectTester as PyrigTester
+from pyrig.src.processes import Args
+
+class ProjectTester(PyrigTester):
+    """Custom test runner with coverage enforcement."""
+    
+    def test_args(self, *args: str) -> Args:
+        """Run tests with strict coverage."""
+        return super().test_args(
+            "--cov-fail-under=95",
+            "--cov-report=html",
+            *args
+        )
+```
+
+### Override Config Defaults
+
+Change default configuration values:
+
+```python
+from pyrig.rig.configs.pyproject import PyprojectConfigFile
+
+class PyprojectConfigFile(PyprojectConfigFile):
+    """Custom pyproject.toml with organization defaults."""
+    
+    def _configs(self) -> dict:
+        """Merge org defaults with pyrig defaults."""
+        config = super()._configs()
+        
+        # Add custom metadata
+        config["project"]["authors"] = [{
+            "name": "Acme Platform Team",
+            "email": "platform@acme.com"
+        }]
+        
+        # Customize ruff settings
+        config["tool"]["ruff"]["line-length"] = 100
+        
+        return config
+```
+
+### Override Badge URLs
+
+Customize README badges:
+
+```python
+from pyrig.rig.tools.linter import Linter as PyrigLinter
+
+class Linter(PyrigLinter):
+    def badge_urls(self) -> tuple[str, str]:
+        """Link to internal ruff documentation."""
+        badge, _ = super().badge_urls()
+        return (badge, "https://internal.acme.com/docs/ruff")
+```
+
+### Override Dev Dependencies
+
+Change which dependencies are added for a tool:
+
+```python
+from pyrig.rig.tools.linter import Linter as PyrigLinter
+
+class Linter(PyrigLinter):
+    def dev_dependencies(self) -> tuple[str, ...]:
+        """Use specific ruff version."""
+        return ("ruff>=0.15.0,<0.16.0",)
+```
+
+## Package Structure Best Practices
+
+### Minimal Package
+
+For simple overrides:
+
+```
+my_pyrig/
+├── rig/
+│   ├── tools/
+│   │   ├── __init__.py
+│   │   └── linter.py       # Override one tool
+│   └── __init__.py
+├── __init__.py
+└── pyproject.toml
+```
+
+### Full-Featured Package
+
+For comprehensive standards:
+
+```
+my_pyrig/
+├── rig/
+│   ├── tools/              # Tool overrides
+│   │   ├── __init__.py
+│   │   ├── linter.py
+│   │   └── package_manager.py
+│   ├── configs/            # Config overrides
+│   │   ├── __init__.py
+│   │   ├── pyproject.py
+│   │   └── company_config.py
+│   ├── cli/
+│   │   ├── subcommands/    # Custom commands
+│   │   │   ├── __init__.py
+│   │   │   ├── deploy.py
+│   │   │   └── validate.py
+│   │   └── __init__.py
+│   ├── builders/           # Custom builders
+│   │   ├── __init__.py
+│   │   └── docker_builder.py
+│   └── __init__.py
+├── src/                    # Shared utilities
+│   ├── __init__.py
+│   └── company_utils.py
+├── tests/                  # Tests for your package
+│   └── __init__.py
+├── __init__.py
+└── pyproject.toml
+```
+
+## Testing Your Extensions
+
+Test that your overrides work correctly:
+
+```python
+from my_pyrig.rig.tools.linter import Linter
+
+def test_linter_override():
+    """Verify our Linter is discovered."""
+    # The .I pattern should find our implementation
+    from pyrig.rig.tools.linter import Linter as BaseLinter
+    
+    assert BaseLinter.I.__class__.__module__ == "my_pyrig.rig.tools.linter"
+    assert isinstance(BaseLinter.I, Linter)
+
+def test_custom_config_discovered():
+    """Verify custom configs are discovered."""
+    from pyrig.rig.configs.base.base import ConfigFile
+    from my_pyrig.rig.configs.company_config import CompanyConfig
+    
+    subclasses = list(ConfigFile.subclasses())
+    assert any(cls.__name__ == "CompanyConfig" for cls in subclasses)
+```
+
+## Using Your Package
+
+### In New Projects
+
+```bash
+# Create new project
+uv init my-new-project
+cd my-new-project
+
+# Add your package
+uv add pyrig my-pyrig
+
+# Initialize - uses YOUR standards!
+uv run pyrig init
+```
+
+### In Existing Projects
+
+```bash
+# Add to existing project
+uv add my-pyrig
+
+# Re-run init to apply your standards
+uv run pyrig init
+```
+
+All your overrides, configs, and commands are automatically applied!
+
+## Advanced Patterns
+
+### Conditional Overrides
+
+Apply different behaviors based on context:
+
+```python
+import os
+from pyrig.rig.tools.package_manager import PackageManager as PyrigPM
+from pyrig.src.processes import Args
+
+class PackageManager(PyrigPM):
+    def publish_args(self, *args: str, token: str) -> Args:
+        """Auto-detect registry from environment."""
+        registry = os.getenv("PYPI_REGISTRY", "https://pypi.org")
+        return self.args(
+            "publish",
+            "--registry", registry,
+            "--token", token,
+            *args
+        )
+```
+
+### Shared Utilities
+
+Create utilities for all your projects:
+
+```python
+# my_pyrig/src/company_utils.py
+def get_team_oncall(team: str) -> str:
+    """Get oncall email for a team."""
+    return f"{team}-oncall@acme.com"
+
+# my_pyrig/rig/cli/subcommands/oncall.py
+import typer
+from my_pyrig.src.company_utils import get_team_oncall
+
+def oncall(team: str) -> None:
+    """Show oncall for a team."""
+    typer.echo(f"Oncall: {get_team_oncall(team)}")
+```
+
+### Multi-Layer Inheritance
+
+Create organization, team, and project layers:
+
+```
+pyrig (base framework)
+  ↓
+acme-pyrig (company standards)
+  ↓
+acme-platform-pyrig (team standards)
+  ↓
+my-service (project-specific)
+```
+
+Each layer can override the previous one!
+
+## Next Steps
+
+- [Creating Custom Tools](/guides/creating-custom-tools) - Deep dive into tool creation
+- [Packaging Guide](/guides/packaging) - Learn about the uv_build backend
+- [Config Architecture](https://winipedia.github.io/pyrig/configs/architecture/) - Understanding config system
+- [Tool Architecture](https://winipedia.github.io/pyrig/tools/architecture/) - Understanding tool system
+
+## Common Patterns
+
+### Organization-Wide Standards
+
+```python
+# acme_pyrig/rig/configs/pyproject.py
+class PyprojectConfigFile(PyprojectConfigFile):
+    def _configs(self) -> dict:
+        config = super()._configs()
+        config["project"]["authors"] = [{"name": "Acme Corp"}]
+        config["tool"]["ruff"]["line-length"] = 100
+        return config
+```
+
+### Team-Specific Workflows
+
+```python
+# platform_pyrig/rig/cli/subcommands/deploy.py
+def deploy(env: str) -> None:
+    """Deploy using platform's pipeline."""
+    # Team-specific deployment logic
+    pass
+```
+
+### Project-Specific Overrides
+
+```python
+# my_service/rig/tools/linter.py
+class Linter(Linter):
+    def check_args(self, *args: str) -> Args:
+        # Project-specific lint exceptions
+        return super().check_args("--ignore", "D100", *args)
+```

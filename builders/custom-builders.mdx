@@ -1,0 +1,509 @@
+---
+title: Custom Builders
+description: Create your own custom artifact builders
+---
+
+## Overview
+
+Custom builders let you create any type of build artifact: executables, documentation, packages, Docker images, or anything else. Builders extend the `BuilderConfigFile` base class and implement the `create_artifacts()` method.
+
+## Creating a Custom Builder
+
+### 1. Choose a Location
+
+Place your builder in `pyrig/rig/builders/` for automatic discovery:
+
+```
+myapp/
+  pyrig/
+    rig/
+      builders/
+        __init__.py
+        my_builder.py    # Your custom builder
+```
+
+Builders are automatically discovered and executed when you run `pyrig build`.
+
+### 2. Extend BuilderConfigFile
+
+Create a class that extends `BuilderConfigFile`:
+
+```python
+from pathlib import Path
+from pyrig.rig.builders.base.base import BuilderConfigFile
+
+class MyBuilder(BuilderConfigFile):
+    """Custom builder for creating my artifacts."""
+    
+    def create_artifacts(self, temp_artifacts_dir: Path) -> None:
+        """Create artifacts in the temporary directory."""
+        # Your build logic here
+        output = temp_artifacts_dir / "my_artifact.zip"
+        output.write_text("artifact content")
+```
+
+### 3. Implement create_artifacts()
+
+The `create_artifacts()` method is where your build logic lives:
+
+```python
+def create_artifacts(self, temp_artifacts_dir: Path) -> None:
+    """Create artifacts in the temporary directory.
+    
+    All files created in temp_artifacts_dir will be:
+    1. Automatically collected
+    2. Renamed with platform suffixes (e.g., myapp-Linux.zip)
+    3. Moved to the output directory (default: dist/)
+    4. Cleaned up (temporary directory deleted)
+    
+    Args:
+        temp_artifacts_dir: Temporary directory for creating artifacts
+    """
+    # Your build logic here
+    pass
+```
+
+### 4. Build
+
+Run the build command:
+
+```bash
+uv run pyrig build
+```
+
+Your builder will be automatically discovered and executed.
+
+## Example Builders
+
+### Documentation Builder
+
+Create a builder that archives documentation:
+
+```python
+import shutil
+from pathlib import Path
+from pyrig.rig.builders.base.base import BuilderConfigFile
+
+class DocsBuilder(BuilderConfigFile):
+    """Builder that creates a documentation archive."""
+    
+    def create_artifacts(self, temp_artifacts_dir: Path) -> None:
+        """Create documentation archive."""
+        # Create archive name
+        archive_name = f"{self.app_name()}-docs"
+        output = temp_artifacts_dir / archive_name
+        
+        # Archive the docs directory
+        docs_dir = self.root_path() / "docs"
+        shutil.make_archive(
+            str(output),
+            'zip',
+            docs_dir
+        )
+```
+
+Output: `dist/myapp-docs-Linux.zip`
+
+### Wheel Builder
+
+Create a builder that builds Python wheels:
+
+```python
+import subprocess
+from pathlib import Path
+from pyrig.rig.builders.base.base import BuilderConfigFile
+
+class WheelBuilder(BuilderConfigFile):
+    """Builder that creates Python wheels."""
+    
+    def create_artifacts(self, temp_artifacts_dir: Path) -> None:
+        """Build Python wheel."""
+        # Run build command
+        subprocess.run(
+            ["python", "-m", "build", "--wheel", "--outdir", str(temp_artifacts_dir)],
+            check=True,
+            cwd=self.root_path()
+        )
+```
+
+Output: `dist/myapp-0.1.0-py3-none-any-Linux.whl`
+
+### Docker Image Builder
+
+Create a builder that builds and exports Docker images:
+
+```python
+import subprocess
+from pathlib import Path
+from pyrig.rig.builders.base.base import BuilderConfigFile
+
+class DockerBuilder(BuilderConfigFile):
+    """Builder that creates Docker images."""
+    
+    def create_artifacts(self, temp_artifacts_dir: Path) -> None:
+        """Build and export Docker image."""
+        app_name = self.app_name()
+        image_name = f"{app_name}:latest"
+        output = temp_artifacts_dir / f"{app_name}.tar"
+        
+        # Build image
+        subprocess.run(
+            ["docker", "build", "-t", image_name, "."],
+            check=True,
+            cwd=self.root_path()
+        )
+        
+        # Export image
+        subprocess.run(
+            ["docker", "save", "-o", str(output), image_name],
+            check=True
+        )
+```
+
+Output: `dist/myapp-Linux.tar`
+
+### Source Archive Builder
+
+Create a builder that creates source archives:
+
+```python
+import shutil
+from pathlib import Path
+from pyrig.rig.builders.base.base import BuilderConfigFile
+
+class SourceBuilder(BuilderConfigFile):
+    """Builder that creates source code archives."""
+    
+    def create_artifacts(self, temp_artifacts_dir: Path) -> None:
+        """Create source archive."""
+        app_name = self.app_name()
+        output = temp_artifacts_dir / f"{app_name}-src"
+        
+        # Create archive of source code
+        shutil.make_archive(
+            str(output),
+            'gztar',  # .tar.gz
+            self.root_path(),
+            base_dir=self.src_package_path().name
+        )
+```
+
+Output: `dist/myapp-src-Linux.tar.gz`
+
+## Advanced Customization
+
+### Custom Output Directory
+
+Override `dist_dir_name()` to change the output directory:
+
+```python
+class MyBuilder(BuilderConfigFile):
+    
+    @classmethod
+    def dist_dir_name(cls) -> str:
+        """Change output directory to 'artifacts/'."""
+        return "artifacts"
+    
+    def create_artifacts(self, temp_artifacts_dir: Path) -> None:
+        # ... build logic ...
+        pass
+```
+
+Output: `artifacts/` instead of `dist/`
+
+### Disable Platform Suffixes
+
+Override `platform_specific_name()` to disable platform suffixes:
+
+```python
+class MyBuilder(BuilderConfigFile):
+    
+    def platform_specific_name(self, artifact: Path) -> str:
+        """Return original name without platform suffix."""
+        return artifact.name
+    
+    def create_artifacts(self, temp_artifacts_dir: Path) -> None:
+        # ... build logic ...
+        pass
+```
+
+Output: `dist/myapp.zip` instead of `dist/myapp-Linux.zip`
+
+### Multiple Artifacts
+
+Create multiple artifacts in a single builder:
+
+```python
+class MultiBuilder(BuilderConfigFile):
+    """Builder that creates multiple artifacts."""
+    
+    def create_artifacts(self, temp_artifacts_dir: Path) -> None:
+        """Create multiple artifacts."""
+        app_name = self.app_name()
+        
+        # Create documentation archive
+        docs_output = temp_artifacts_dir / f"{app_name}-docs.zip"
+        # ... create docs archive ...
+        
+        # Create source archive  
+        src_output = temp_artifacts_dir / f"{app_name}-src.tar.gz"
+        # ... create source archive ...
+        
+        # Create wheel
+        wheel_output = temp_artifacts_dir / f"{app_name}-0.1.0-py3-none-any.whl"
+        # ... create wheel ...
+```
+
+Output:
+- `dist/myapp-docs-Linux.zip`
+- `dist/myapp-src-Linux.tar.gz`
+- `dist/myapp-0.1.0-py3-none-any-Linux.whl`
+
+### Conditional Builds
+
+Only create artifacts under certain conditions:
+
+```python
+import platform
+from pathlib import Path
+from pyrig.rig.builders.base.base import BuilderConfigFile
+
+class WindowsBuilder(BuilderConfigFile):
+    """Builder that only runs on Windows."""
+    
+    def create_artifacts(self, temp_artifacts_dir: Path) -> None:
+        """Create Windows-specific artifacts."""
+        if platform.system() != "Windows":
+            # Skip on non-Windows platforms
+            return
+        
+        # Create Windows-specific artifact
+        output = temp_artifacts_dir / "windows_installer.msi"
+        # ... create installer ...
+```
+
+### Using Helper Methods
+
+Use the helper methods provided by `BuilderConfigFile`:
+
+```python
+class MyBuilder(BuilderConfigFile):
+    
+    def create_artifacts(self, temp_artifacts_dir: Path) -> None:
+        """Create artifacts using helper methods."""
+        # Get project information
+        app_name = self.app_name()              # From pyproject.toml
+        root = self.root_path()                 # Project root
+        main = self.main_path()                 # Path to main.py
+        resources = self.resources_path()       # Path to resources/
+        src = self.src_package_path()          # Path to source package
+        
+        # Create artifact using this information
+        output = temp_artifacts_dir / f"{app_name}.zip"
+        # ... build logic ...
+```
+
+## Testing Custom Builders
+
+Use the `config_file_factory` fixture to test builders:
+
+```python
+import pytest
+from pathlib import Path
+from collections.abc import Callable
+from pyrig.rig.builders.base.base import BuilderConfigFile
+from myapp.rig.builders.my_builder import MyBuilder
+
+def test_my_builder(
+    config_file_factory: Callable[[type[BuilderConfigFile]], type[BuilderConfigFile]],
+    tmp_path: Path
+) -> None:
+    """Test custom builder."""
+    # Create test builder that uses tmp_path
+    TestMyBuilder = config_file_factory(MyBuilder)
+    
+    # Validate (triggers build)
+    TestMyBuilder().validate()
+    
+    # Check artifacts were created
+    artifacts = TestMyBuilder().load()
+    assert len(artifacts) > 0
+    assert all(artifact.exists() for artifact in artifacts)
+```
+
+See the [Testing Documentation](/testing/structure) for more details.
+
+## Complete Example
+
+Here's a complete custom builder with all features:
+
+```python
+import subprocess
+import shutil
+from pathlib import Path
+from pyrig.rig.builders.base.base import BuilderConfigFile
+
+class ReleaseBuilder(BuilderConfigFile):
+    """Builder that creates a complete release package.
+    
+    Creates:
+    - Executable (via PyInstaller)
+    - Documentation archive
+    - Source code archive
+    - Checksum file
+    """
+    
+    @classmethod
+    def dist_dir_name(cls) -> str:
+        """Output to releases/ directory."""
+        return "releases"
+    
+    def create_artifacts(self, temp_artifacts_dir: Path) -> None:
+        """Create complete release package."""
+        app_name = self.app_name()
+        root = self.root_path()
+        
+        # 1. Create executable
+        exe_name = f"{app_name}.exe" if platform.system() == "Windows" else app_name
+        exe_path = temp_artifacts_dir / exe_name
+        # ... create executable ...
+        
+        # 2. Create documentation archive
+        docs_output = temp_artifacts_dir / f"{app_name}-docs"
+        shutil.make_archive(str(docs_output), 'zip', root / "docs")
+        
+        # 3. Create source archive
+        src_output = temp_artifacts_dir / f"{app_name}-src"
+        shutil.make_archive(
+            str(src_output),
+            'gztar',
+            root,
+            base_dir=self.src_package_path().name
+        )
+        
+        # 4. Create checksum file
+        checksum_file = temp_artifacts_dir / f"{app_name}.sha256"
+        self._create_checksums(temp_artifacts_dir, checksum_file)
+    
+    def _create_checksums(self, artifacts_dir: Path, output: Path) -> None:
+        """Create SHA256 checksums for all artifacts."""
+        import hashlib
+        
+        with output.open('w') as f:
+            for artifact in artifacts_dir.iterdir():
+                if artifact.is_file() and artifact != output:
+                    # Calculate SHA256
+                    sha256 = hashlib.sha256()
+                    sha256.update(artifact.read_bytes())
+                    # Write to checksum file
+                    f.write(f"{sha256.hexdigest()}  {artifact.name}\n")
+```
+
+Build with:
+
+```bash
+uv run pyrig build
+```
+
+Output in `releases/`:
+- `myapp-Linux` (executable)
+- `myapp-docs-Linux.zip` (documentation)
+- `myapp-src-Linux.tar.gz` (source code)
+- `myapp-Linux.sha256` (checksums)
+
+## Best Practices
+
+### 1. Use Temporary Directory
+
+Always create artifacts in `temp_artifacts_dir`, not directly in `dist/`:
+
+```python
+# Good ✓
+def create_artifacts(self, temp_artifacts_dir: Path) -> None:
+    output = temp_artifacts_dir / "artifact.zip"
+    # ...
+
+# Bad ✗
+def create_artifacts(self, temp_artifacts_dir: Path) -> None:
+    output = Path("dist") / "artifact.zip"  # Don't do this!
+    # ...
+```
+
+### 2. Use Helper Methods
+
+Use the provided helper methods instead of hardcoding paths:
+
+```python
+# Good ✓
+root = self.root_path()
+main = self.main_path()
+
+# Bad ✗
+root = Path.cwd()
+main = Path("myapp/main.py")
+```
+
+### 3. Handle Errors
+
+Handle build errors gracefully:
+
+```python
+def create_artifacts(self, temp_artifacts_dir: Path) -> None:
+    try:
+        # Build logic
+        subprocess.run(["build", "command"], check=True)
+    except subprocess.CalledProcessError as e:
+        raise ValueError(f"Build failed: {e}") from e
+```
+
+### 4. Document Your Builder
+
+Add clear docstrings:
+
+```python
+class MyBuilder(BuilderConfigFile):
+    """Builder that creates XYZ artifacts.
+    
+    Creates:
+    - artifact1.zip: Description of artifact 1
+    - artifact2.tar.gz: Description of artifact 2
+    
+    Requirements:
+    - Tool X must be installed
+    - Environment variable Y must be set
+    """
+    
+    def create_artifacts(self, temp_artifacts_dir: Path) -> None:
+        """Create XYZ artifacts.
+        
+        Args:
+            temp_artifacts_dir: Temporary directory for artifacts
+        
+        Raises:
+            ValueError: If tool X is not available
+        """
+        # ...
+```
+
+### 5. Test Your Builder
+
+Always write tests for custom builders:
+
+```python
+def test_my_builder(config_file_factory, tmp_path):
+    TestBuilder = config_file_factory(MyBuilder)
+    TestBuilder().validate()
+    artifacts = TestBuilder().load()
+    assert len(artifacts) > 0
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="PyInstaller Integration" icon="box" href="/builders/pyinstaller">
+    Learn about PyInstaller integration
+  </Card>
+  <Card title="Testing" icon="flask" href="/testing/structure">
+    Learn how to test your builders
+  </Card>
+</CardGroup>

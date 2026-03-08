@@ -1,0 +1,600 @@
+---
+title: Creating Custom Tools
+description: Step-by-step guide for creating custom tool wrappers in pyrig
+---
+
+## Overview
+
+Tools in pyrig are type-safe wrappers around command-line utilities. They provide:
+
+- **Type safety**: Arguments validated at construction time
+- **Composability**: Build complex commands from simple parts
+- **Testability**: Test command construction without execution
+- **Discoverability**: IDE autocomplete shows available commands
+- **Extensibility**: Override behavior in dependent packages
+
+This guide walks through creating a custom tool from scratch.
+
+## Understanding the Tool Base Class
+
+All tools inherit from `pyrig.rig.tools.base.Tool`:
+
+```python
+from abc import abstractmethod
+from pyrig.rig.tools.base.base import Tool, ToolGroup
+from pyrig.src.processes import Args
+
+class Tool(DependencySubclass):
+    """Abstract base for tool command argument construction."""
+    
+    @abstractmethod
+    def name(self) -> str:
+        """Tool command name (e.g., 'git', 'docker', 'npm')."""
+    
+    @abstractmethod
+    def group(self) -> str:
+        """Tool group for badge organization."""
+    
+    @abstractmethod
+    def badge_urls(self) -> tuple[str, str]:
+        """(badge_url, link_url) for README badges."""
+    
+    def dev_dependencies(self) -> tuple[str, ...]:
+        """Development dependencies for this tool."""
+        return (self.name(),)
+    
+    def args(self, *args: str) -> Args:
+        """Construct Args with tool name prepended."""
+        return Args((self.name(), *args))
+```
+
+## Step 1: Create a Simple Tool
+
+Let's create a wrapper for `docker`.
+
+### Minimal Implementation
+
+Create `my_pyrig/rig/tools/docker_tool.py`:
+
+```python
+from pyrig.rig.tools.base.base import Tool, ToolGroup
+from pyrig.src.processes import Args
+
+class DockerTool(Tool):
+    """Docker container management tool."""
+    
+    def name(self) -> str:
+        """Tool command name."""
+        return "docker"
+    
+    def group(self) -> str:
+        """Badge group for README."""
+        return ToolGroup.TOOLING
+    
+    def badge_urls(self) -> tuple[str, str]:
+        """Badge and link URLs."""
+        return (
+            "https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white",
+            "https://www.docker.com/"
+        )
+    
+    def build_args(self, tag: str, path: str = ".") -> Args:
+        """Construct docker build command."""
+        return self.args("build", "-t", tag, path)
+    
+    def run_args(self, image: str, *args: str) -> Args:
+        """Construct docker run command."""
+        return self.args("run", image, *args)
+```
+
+### Usage
+
+```python
+from my_pyrig.rig.tools.docker_tool import DockerTool
+
+# Get the instance (or use DockerTool.I)
+tool = DockerTool.I
+
+# Build an image
+tool.build_args("my-app:latest").run()
+
+# Run a container
+tool.run_args("my-app:latest", "-p", "8000:8000").run()
+
+# Just get the command string
+command = str(tool.run_args("nginx"))
+print(command)  # "docker run nginx"
+```
+
+## Step 2: Add Comprehensive Commands
+
+Let's expand the Docker tool with more commands:
+
+```python
+from pyrig.rig.tools.base.base import Tool, ToolGroup
+from pyrig.src.processes import Args
+
+class DockerTool(Tool):
+    """Docker container and image management."""
+    
+    def name(self) -> str:
+        return "docker"
+    
+    def group(self) -> str:
+        return ToolGroup.TOOLING
+    
+    def badge_urls(self) -> tuple[str, str]:
+        return (
+            "https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white",
+            "https://www.docker.com/"
+        )
+    
+    # Build Commands
+    def build_args(self, tag: str, path: str = ".", *args: str) -> Args:
+        """Build an image: docker build -t <tag> <path>."""
+        return self.args("build", "-t", tag, path, *args)
+    
+    def build_no_cache_args(self, tag: str, path: str = ".") -> Args:
+        """Build without cache: docker build --no-cache -t <tag> <path>."""
+        return self.build_args(tag, path, "--no-cache")
+    
+    # Run Commands
+    def run_args(self, image: str, *args: str) -> Args:
+        """Run a container: docker run <image>."""
+        return self.args("run", image, *args)
+    
+    def run_detached_args(self, image: str, *args: str) -> Args:
+        """Run in background: docker run -d <image>."""
+        return self.run_args(image, "-d", *args)
+    
+    def run_interactive_args(self, image: str, *args: str) -> Args:
+        """Run interactively: docker run -it <image>."""
+        return self.run_args(image, "-it", *args)
+    
+    # Image Commands
+    def images_args(self, *args: str) -> Args:
+        """List images: docker images."""
+        return self.args("images", *args)
+    
+    def pull_args(self, image: str, *args: str) -> Args:
+        """Pull an image: docker pull <image>."""
+        return self.args("pull", image, *args)
+    
+    def push_args(self, image: str, *args: str) -> Args:
+        """Push an image: docker push <image>."""
+        return self.args("push", image, *args)
+    
+    def tag_args(self, source: str, target: str) -> Args:
+        """Tag an image: docker tag <source> <target>."""
+        return self.args("tag", source, target)
+    
+    def rmi_args(self, *images: str) -> Args:
+        """Remove images: docker rmi <image>..."""
+        return self.args("rmi", *images)
+    
+    # Container Commands
+    def ps_args(self, *args: str) -> Args:
+        """List containers: docker ps."""
+        return self.args("ps", *args)
+    
+    def ps_all_args(self) -> Args:
+        """List all containers: docker ps -a."""
+        return self.ps_args("-a")
+    
+    def stop_args(self, *containers: str) -> Args:
+        """Stop containers: docker stop <container>..."""
+        return self.args("stop", *containers)
+    
+    def rm_args(self, *containers: str) -> Args:
+        """Remove containers: docker rm <container>..."""
+        return self.args("rm", *containers)
+    
+    def logs_args(self, container: str, *args: str) -> Args:
+        """View container logs: docker logs <container>."""
+        return self.args("logs", container, *args)
+    
+    def exec_args(self, container: str, *command: str) -> Args:
+        """Execute in container: docker exec <container> <command>."""
+        return self.args("exec", container, *command)
+    
+    def exec_interactive_args(self, container: str, *command: str) -> Args:
+        """Execute interactively: docker exec -it <container> <command>."""
+        return self.exec_args(container, "-it", *command)
+    
+    # Cleanup Commands
+    def system_prune_args(self, *args: str) -> Args:
+        """Clean up system: docker system prune."""
+        return self.args("system", "prune", *args)
+    
+    def volume_prune_args(self) -> Args:
+        """Remove unused volumes: docker volume prune."""
+        return self.args("volume", "prune")
+```
+
+## Step 3: Add Custom Dev Dependencies
+
+If your tool requires specific packages:
+
+```python
+class DockerTool(Tool):
+    # ... previous methods ...
+    
+    def dev_dependencies(self) -> tuple[str, ...]:
+        """Development dependencies for Docker tooling."""
+        return (
+            "docker>=7.0.0",  # Python Docker SDK
+            "docker-compose>=1.29.0",
+        )
+```
+
+When `pyrig init` runs, these dependencies are automatically added to `[dependency-groups].dev`!
+
+## Step 4: Test Your Tool
+
+Create comprehensive tests:
+
+```python
+# tests/tools/test_docker_tool.py
+import pytest
+from my_pyrig.rig.tools.docker_tool import DockerTool
+
+class TestDockerTool:
+    """Tests for DockerTool."""
+    
+    def test_tool_discovery(self):
+        """Verify tool is discovered via .I pattern."""
+        tool = DockerTool.I
+        assert isinstance(tool, DockerTool)
+        assert tool.name() == "docker"
+    
+    def test_build_args(self):
+        """Test docker build command construction."""
+        tool = DockerTool.I
+        args = tool.build_args("my-app:latest", ".")
+        
+        assert str(args) == "docker build -t my-app:latest ."
+        assert args.command == ("docker", "build", "-t", "my-app:latest", ".")
+    
+    def test_build_no_cache(self):
+        """Test docker build with --no-cache."""
+        args = DockerTool.I.build_no_cache_args("my-app:v1")
+        assert "--no-cache" in args.command
+    
+    def test_run_detached(self):
+        """Test docker run -d."""
+        args = DockerTool.I.run_detached_args("nginx")
+        assert str(args) == "docker run nginx -d"
+    
+    def test_run_interactive(self):
+        """Test docker run -it."""
+        args = DockerTool.I.run_interactive_args("ubuntu", "bash")
+        assert "-it" in args.command
+        assert "bash" in args.command
+    
+    def test_badge_urls(self):
+        """Verify badge URLs are set."""
+        badge_url, link_url = DockerTool.I.badge_urls()
+        assert "docker" in badge_url.lower()
+        assert "docker.com" in link_url
+    
+    def test_dev_dependencies(self):
+        """Verify dev dependencies are specified."""
+        deps = DockerTool.I.dev_dependencies()
+        assert "docker" in deps[0].lower()
+```
+
+## Step 5: Advanced Patterns
+
+### Composable Commands
+
+Build complex commands from simple parts:
+
+```python
+class DockerTool(Tool):
+    # ... previous methods ...
+    
+    def run_with_volume_args(
+        self,
+        image: str,
+        host_path: str,
+        container_path: str,
+        *args: str
+    ) -> Args:
+        """Run with volume mount."""
+        return self.run_args(
+            image,
+            "-v", f"{host_path}:{container_path}",
+            *args
+        )
+    
+    def run_with_env_args(
+        self,
+        image: str,
+        env_vars: dict[str, str],
+        *args: str
+    ) -> Args:
+        """Run with environment variables."""
+        env_args = []
+        for key, value in env_vars.items():
+            env_args.extend(["-e", f"{key}={value}"])
+        
+        return self.run_args(image, *env_args, *args)
+    
+    def run_full_args(
+        self,
+        image: str,
+        *,
+        detached: bool = False,
+        interactive: bool = False,
+        volumes: dict[str, str] | None = None,
+        env: dict[str, str] | None = None,
+        ports: dict[int, int] | None = None,
+        name: str | None = None,
+    ) -> Args:
+        """Run with all options."""
+        run_args = []
+        
+        if detached:
+            run_args.append("-d")
+        if interactive:
+            run_args.extend(["-it"])
+        if name:
+            run_args.extend(["--name", name])
+        
+        if volumes:
+            for host, container in volumes.items():
+                run_args.extend(["-v", f"{host}:{container}"])
+        
+        if env:
+            for key, value in env.items():
+                run_args.extend(["-e", f"{key}={value}"])
+        
+        if ports:
+            for host_port, container_port in ports.items():
+                run_args.extend(["-p", f"{host_port}:{container_port}"])
+        
+        return self.run_args(image, *run_args)
+```
+
+Usage:
+
+```python
+tool = DockerTool.I
+
+# Complex command with all options
+tool.run_full_args(
+    "postgres:14",
+    detached=True,
+    name="my-db",
+    env={"POSTGRES_PASSWORD": "secret"},
+    ports={5432: 5432},
+    volumes={"/local/data": "/var/lib/postgresql/data"}
+).run()
+```
+
+### Context-Aware Tools
+
+Tools that adapt based on environment:
+
+```python
+import os
+from pathlib import Path
+
+class DockerTool(Tool):
+    # ... previous methods ...
+    
+    def registry(self) -> str:
+        """Get registry from environment."""
+        return os.getenv("DOCKER_REGISTRY", "docker.io")
+    
+    def push_to_registry_args(self, image: str, tag: str) -> Args:
+        """Push to configured registry."""
+        registry = self.registry()
+        full_image = f"{registry}/{image}:{tag}"
+        return self.push_args(full_image)
+    
+    def dockerfile_path(self) -> Path:
+        """Get Dockerfile path from config or default."""
+        # Could read from company config
+        return Path("Containerfile")  # or Dockerfile
+    
+    def build_from_config_args(self, tag: str) -> Args:
+        """Build using configured Dockerfile."""
+        dockerfile = self.dockerfile_path()
+        return self.build_args(
+            tag,
+            ".",
+            "-f", str(dockerfile)
+        )
+```
+
+### Tool Validation
+
+Validate tool availability:
+
+```python
+import shutil
+from typing import override
+
+class DockerTool(Tool):
+    # ... previous methods ...
+    
+    @override
+    def args(self, *args: str) -> Args:
+        """Construct args with validation."""
+        self.validate_installed()
+        return super().args(*args)
+    
+    def validate_installed(self) -> None:
+        """Ensure Docker is installed."""
+        if not shutil.which(self.name()):
+            msg = f"{self.name()} is not installed or not in PATH"
+            raise RuntimeError(msg)
+    
+    def version_args(self) -> Args:
+        """Get Docker version."""
+        return self.args("--version")
+```
+
+## Real-World Examples
+
+### Example 1: Terraform Tool
+
+```python
+from pathlib import Path
+from pyrig.rig.tools.base.base import Tool, ToolGroup
+from pyrig.src.processes import Args
+
+class TerraformTool(Tool):
+    """Terraform infrastructure as code tool."""
+    
+    def name(self) -> str:
+        return "terraform"
+    
+    def group(self) -> str:
+        return ToolGroup.TOOLING
+    
+    def badge_urls(self) -> tuple[str, str]:
+        return (
+            "https://img.shields.io/badge/Terraform-7B42BC?logo=terraform&logoColor=white",
+            "https://www.terraform.io/"
+        )
+    
+    def init_args(self, *args: str) -> Args:
+        """Initialize Terraform: terraform init."""
+        return self.args("init", *args)
+    
+    def plan_args(self, *args: str) -> Args:
+        """Generate execution plan: terraform plan."""
+        return self.args("plan", *args)
+    
+    def apply_args(self, *args: str) -> Args:
+        """Apply changes: terraform apply."""
+        return self.args("apply", *args)
+    
+    def apply_auto_approve_args(self, *args: str) -> Args:
+        """Apply without confirmation: terraform apply -auto-approve."""
+        return self.apply_args("-auto-approve", *args)
+    
+    def destroy_args(self, *args: str) -> Args:
+        """Destroy infrastructure: terraform destroy."""
+        return self.args("destroy", *args)
+    
+    def validate_args(self) -> Args:
+        """Validate configuration: terraform validate."""
+        return self.args("validate")
+    
+    def fmt_args(self, *args: str) -> Args:
+        """Format configuration: terraform fmt."""
+        return self.args("fmt", *args)
+```
+
+### Example 2: Kubectl Tool
+
+```python
+from pyrig.rig.tools.base.base import Tool, ToolGroup
+from pyrig.src.processes import Args
+
+class KubectlTool(Tool):
+    """Kubernetes command-line tool."""
+    
+    def name(self) -> str:
+        return "kubectl"
+    
+    def group(self) -> str:
+        return ToolGroup.TOOLING
+    
+    def badge_urls(self) -> tuple[str, str]:
+        return (
+            "https://img.shields.io/badge/Kubernetes-326CE5?logo=kubernetes&logoColor=white",
+            "https://kubernetes.io/"
+        )
+    
+    def get_args(self, resource: str, *args: str) -> Args:
+        """Get resources: kubectl get <resource>."""
+        return self.args("get", resource, *args)
+    
+    def describe_args(self, resource: str, name: str, *args: str) -> Args:
+        """Describe resource: kubectl describe <resource> <name>."""
+        return self.args("describe", resource, name, *args)
+    
+    def apply_args(self, file: str, *args: str) -> Args:
+        """Apply configuration: kubectl apply -f <file>."""
+        return self.args("apply", "-f", file, *args)
+    
+    def delete_args(self, resource: str, name: str, *args: str) -> Args:
+        """Delete resource: kubectl delete <resource> <name>."""
+        return self.args("delete", resource, name, *args)
+    
+    def logs_args(self, pod: str, *args: str) -> Args:
+        """Get pod logs: kubectl logs <pod>."""
+        return self.args("logs", pod, *args)
+    
+    def exec_args(self, pod: str, *command: str) -> Args:
+        """Execute in pod: kubectl exec <pod> -- <command>."""
+        return self.args("exec", pod, "--", *command)
+```
+
+### Example 3: NPM Tool
+
+```python
+from pyrig.rig.tools.base.base import Tool, ToolGroup
+from pyrig.src.processes import Args
+
+class NPMTool(Tool):
+    """Node.js package manager tool."""
+    
+    def name(self) -> str:
+        return "npm"
+    
+    def group(self) -> str:
+        return ToolGroup.TOOLING
+    
+    def badge_urls(self) -> tuple[str, str]:
+        return (
+            "https://img.shields.io/badge/npm-CB3837?logo=npm&logoColor=white",
+            "https://www.npmjs.com/"
+        )
+    
+    def install_args(self, *packages: str) -> Args:
+        """Install packages: npm install <packages>."""
+        return self.args("install", *packages)
+    
+    def install_dev_args(self, *packages: str) -> Args:
+        """Install dev dependencies: npm install --save-dev <packages>."""
+        return self.install_args("--save-dev", *packages)
+    
+    def run_args(self, script: str, *args: str) -> Args:
+        """Run script: npm run <script>."""
+        return self.args("run", script, *args)
+    
+    def test_args(self, *args: str) -> Args:
+        """Run tests: npm test."""
+        return self.args("test", *args)
+    
+    def build_args(self, *args: str) -> Args:
+        """Build project: npm run build."""
+        return self.run_args("build", *args)
+    
+    def publish_args(self, *args: str) -> Args:
+        """Publish package: npm publish."""
+        return self.args("publish", *args)
+```
+
+## Next Steps
+
+- [Extending pyrig](/guides/extending-pyrig) - Learn about the .I pattern
+- [Packaging Guide](/guides/packaging) - Package your tools
+- [Tool Architecture](https://winipedia.github.io/pyrig/tools/architecture/) - Deep dive into tool system
+- [Args Reference](https://winipedia.github.io/pyrig/api/processes/) - Understanding the Args class
+
+## Best Practices
+
+1. **Name methods descriptively**: `build_no_cache_args` is better than `build_args2`
+2. **Return Args objects**: Never return strings or execute directly
+3. **Use composition**: Build complex commands from simple ones
+4. **Document commands**: Docstrings should show the actual command
+5. **Test thoroughly**: Test command construction, not execution
+6. **Provide sensible defaults**: Make common cases easy
+7. **Use type hints**: Help IDEs and type checkers
+8. **Follow conventions**: Study existing tools for patterns

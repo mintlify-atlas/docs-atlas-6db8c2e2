@@ -1,0 +1,357 @@
+---
+title: pyrig scratch
+description: Execute the .scratch file for temporary, ad-hoc code
+---
+
+## Overview
+
+The `scratch` command executes the `.scratch` file located at the project root. The `.scratch` file is a Python script intended for temporary, experimental code that doesn't belong in the main source files.
+
+```bash
+uv run pyrig scratch
+```
+
+## What It Does
+
+The command:
+
+1. **Locates** the `.scratch` file at the project root
+2. **Executes** the file in a clean namespace using `runpy.run_path()`
+3. **Provides access** to the project's environment and dependencies
+
+<Note>
+  The `.scratch` file is **not tracked** by version control and is included in `.gitignore` by default.
+</Note>
+
+## Usage
+
+### Basic Usage
+
+```bash
+# Create or edit .scratch file
+vim .scratch
+
+# Execute it
+uv run pyrig scratch
+```
+
+### Example .scratch File
+
+```python
+# .scratch
+"""Temporary experimental code."""
+
+from myproject import MyClass
+from myproject.utils import helper
+
+# Test new functionality
+obj = MyClass()
+result = obj.experimental_method()
+print(f"Result: {result}")
+
+# Quick debugging
+import pdb; pdb.set_trace()
+
+# Data exploration
+import pandas as pd
+df = pd.read_csv('data.csv')
+print(df.head())
+```
+
+Then run:
+
+```bash
+$ uv run pyrig scratch
+Result: 42
+# ... debugger starts or output appears
+```
+
+### With Verbose Output
+
+```bash
+# See execution details
+uv run pyrig -v scratch
+```
+
+### Quiet Mode
+
+```bash
+# Suppress pyrig output (script output still shown)
+uv run pyrig -q scratch
+```
+
+## Use Cases
+
+### Quick Prototyping
+
+```python
+# .scratch - Testing new API design
+from myproject.api import Client
+
+client = Client()
+response = client.new_feature(param1='test')
+print(response)
+```
+
+### Debugging
+
+```python
+# .scratch - Debugging a specific issue
+import logging
+logging.basicConfig(level=logging.DEBUG)
+
+from myproject.problematic_module import buggy_function
+
+result = buggy_function(edge_case_input)
+print(f"Debug: {result}")
+```
+
+### Data Analysis
+
+```python
+# .scratch - Analyzing project data
+import pandas as pd
+from myproject.data import load_dataset
+
+df = load_dataset()
+print(df.describe())
+print(df.groupby('category').mean())
+```
+
+### API Testing
+
+```python
+# .scratch - Testing external API integration
+from myproject.integrations import ThirdPartyAPI
+
+api = ThirdPartyAPI(api_key='test-key')
+response = api.fetch_data()
+print(response.json())
+```
+
+### Code Experiments
+
+```python
+# .scratch - Trying out new library features
+import numpy as np
+from new_library import ExperimentalFeature
+
+data = np.random.rand(100)
+result = ExperimentalFeature().process(data)
+print(result)
+```
+
+## Behavior
+
+<ParamField path="Execution" type="runpy.run_path">
+  Executes in a clean namespace, similar to running `python .scratch`.
+</ParamField>
+
+<ParamField path="Environment" type="project">
+  Has access to all project dependencies and modules from the virtual environment.
+</ParamField>
+
+<ParamField path="Working Directory" type="project-root">
+  Executes with the project root as the working directory.
+</ParamField>
+
+<ParamField path="Output" type="stdout/stderr">
+  All output goes to stdout/stderr as normal. No special capturing.
+</ParamField>
+
+## File Location
+
+The `.scratch` file must be at the project root:
+
+```
+myproject/
+├── .scratch          # ← Here
+├── pyproject.toml
+├── src/
+│   └── myproject/
+└── tests/
+```
+
+<Warning>
+  If `.scratch` doesn't exist, the command will fail with a FileNotFoundError.
+</Warning>
+
+## Creating the .scratch File
+
+The `.scratch` file is automatically created by `pyrig mkroot`:
+
+```bash
+# Generate .scratch
+uv run pyrig mkroot
+
+# Edit it
+vim .scratch
+
+# Run it
+uv run pyrig scratch
+```
+
+Default content:
+
+```python
+"""Temporary scratch file for ad-hoc code execution.
+
+This file is not tracked by version control and is intended for:
+- Quick prototyping
+- Debugging
+- Experimental code
+- One-off scripts
+
+Run with: uv run pyrig scratch
+"""
+
+print("Hello from .scratch!")
+```
+
+## Best Practices
+
+### DO:
+
+- Use for temporary, experimental code
+- Use for debugging and prototyping
+- Delete or clear content when done
+- Add notes/comments about what you're testing
+
+```python
+# .scratch
+# Testing the new authentication flow
+# TODO: Move to proper test file once working
+
+from myproject.auth import new_auth_flow
+
+result = new_auth_flow.authenticate(user='test')
+print(f"Auth result: {result}")
+```
+
+### DON'T:
+
+- Don't commit `.scratch` to version control
+- Don't put production code in `.scratch`
+- Don't use for permanent scripts (create a proper module instead)
+- Don't share `.scratch` content (it's local only)
+
+## Advantages Over `python -c`
+
+<CardGroup cols={2}>
+  <Card title="Multi-line Code" icon="code">
+    `.scratch` supports complex, multi-line scripts unlike `python -c`.
+  </Card>
+  
+  <Card title="Persistent" icon="save">
+    Content persists across runs - no need to retype.
+  </Card>
+  
+  <Card title="Editor Support" icon="edit">
+    Use your editor with syntax highlighting and completion.
+  </Card>
+  
+  <Card title="Project Context" icon="folder-tree">
+    Automatically has access to project dependencies.
+  </Card>
+</CardGroup>
+
+## Alternative Approaches
+
+Instead of `.scratch`, you could use:
+
+| Approach | When to Use |
+|----------|-------------|
+| **IPython/Jupyter** | Interactive data exploration |
+| **pytest** | Testing code (permanent tests) |
+| **python -c** | One-liner commands |
+| **.scratch** | Temporary multi-line scripts |
+| **Proper module** | Permanent functionality |
+
+## Cleaning Up
+
+Since `.scratch` is git-ignored, you can:
+
+```bash
+# Clear content
+echo '"""Temporary scratch file."""' > .scratch
+
+# Or delete entirely
+rm .scratch
+
+# Regenerate default
+uv run pyrig mkroot
+```
+
+## Integration with Development Workflow
+
+### During Development
+
+```bash
+# 1. Write experimental code
+vim .scratch
+
+# 2. Test it
+uv run pyrig scratch
+
+# 3. If it works, move to proper module
+mv .scratch src/myproject/new_feature.py
+
+# 4. Create tests
+uv run pyrig mktests
+```
+
+### For Debugging
+
+```bash
+# 1. Reproduce issue in .scratch
+vim .scratch  # Add failing code
+
+# 2. Add debugging
+uv run pyrig -v scratch  # See detailed output
+
+# 3. Fix issue in source
+vim src/myproject/module.py
+
+# 4. Verify fix
+uv run pyrig scratch  # Should work now
+```
+
+## Error Handling
+
+If `.scratch` raises an exception:
+
+```python
+# .scratch
+raise ValueError("Something went wrong")
+```
+
+```bash
+$ uv run pyrig scratch
+Traceback (most recent call last):
+  File ".scratch", line 1, in <module>
+    raise ValueError("Something went wrong")
+ValueError: Something went wrong
+```
+
+The full traceback is displayed, just like running `python .scratch`.
+
+## Related Commands
+
+- **[mkroot](/cli/commands/mkroot)** - Creates the default `.scratch` file
+- **[init](/cli/commands/init)** - Full project initialization (includes `.scratch`)
+
+## Implementation
+
+The `scratch` command uses `runpy.run_path()` to execute `.scratch` in a clean namespace:
+
+```python
+from runpy import run_path
+
+run_path(DotScratchConfigFile.I.path().as_posix())
+```
+
+See `pyrig/rig/cli/commands/scratch.py:8`.
+
+<Note>
+  Run `uv run pyrig scratch --help` to see the command's built-in help text.
+</Note>

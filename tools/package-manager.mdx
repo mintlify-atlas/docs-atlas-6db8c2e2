@@ -1,0 +1,424 @@
+---
+title: Package Manager
+description: UV package manager wrapper for dependency management
+---
+
+## Overview
+
+The `PackageManager` class provides a type-safe wrapper around [UV](https://github.com/astral-sh/uv), Astral's fast Python package manager. UV is written in Rust and replaces traditional tools like pip, virtualenv, and poetry with a unified, high-performance solution.
+
+## Location
+
+`pyrig.rig.tools.package_manager.PackageManager` (rig/tools/package_manager.py:18)
+
+## Quick Start
+
+```python
+from pyrig.rig.tools.package_manager import PackageManager
+
+# Install dependencies
+PackageManager.I.install_dependencies_args().run()
+
+# Add a new package
+PackageManager.I.add_dependencies_args("requests", "httpx").run()
+
+# Add dev dependencies
+PackageManager.I.add_dev_dependencies_args("pytest", "ruff").run()
+
+# Update all dependencies
+PackageManager.I.update_dependencies_args().run()
+```
+
+## Core Operations
+
+### Project Initialization
+
+<CodeGroup>
+```python Initialize Project
+def init_project_args(self, *args: str) -> Args:
+    """Construct uv init arguments.
+    
+    Returns:
+        Args for 'uv init'.
+    """
+    return self.args("init", *args)
+
+# Usage
+PackageManager.I.init_project_args().run()
+PackageManager.I.init_project_args("--name", "my-project").run()
+```
+</CodeGroup>
+
+### Dependency Installation
+
+<CodeGroup>
+```python Install All Dependencies
+def install_dependencies_args(self, *args: str) -> Args:
+    """Construct uv sync arguments.
+    
+    Returns:
+        Args for 'uv sync'.
+    """
+    return self.args("sync", *args)
+
+# Usage
+PackageManager.I.install_dependencies_args().run()
+```
+
+```python Install Without Dev
+def install_dependencies_no_dev_args(self, *args: str) -> Args:
+    """Construct uv sync arguments without dev dependencies.
+    
+    Returns:
+        Args for 'uv sync --no-group dev'.
+    """
+    return self.install_dependencies_args("--no-group", "dev", *args)
+
+# Usage for production
+PackageManager.I.install_dependencies_no_dev_args().run()
+```
+</CodeGroup>
+
+### Adding Dependencies
+
+<Tabs>
+  <Tab title="Production Dependencies">
+    ```python
+    def add_dependencies_args(self, *args: str) -> Args:
+        """Construct uv add arguments.
+        
+        Args:
+            *args: Package names or add arguments.
+        
+        Returns:
+            Args for 'uv add'.
+        """
+        return self.args("add", *args)
+    
+    # Usage
+    PackageManager.I.add_dependencies_args("requests").run()
+    PackageManager.I.add_dependencies_args("httpx", "pydantic").run()
+    
+    # With version specifiers
+    PackageManager.I.add_dependencies_args("django>=4.0").run()
+    ```
+  </Tab>
+  <Tab title="Dev Dependencies">
+    ```python
+    def add_dev_dependencies_args(self, *args: str) -> Args:
+        """Construct uv add arguments for dev dependencies.
+        
+        Args:
+            *args: Package names or add arguments.
+        
+        Returns:
+            Args for 'uv add --group dev'.
+        """
+        return self.args("add", "--group", "dev", *args)
+    
+    # Usage
+    PackageManager.I.add_dev_dependencies_args("pytest").run()
+    PackageManager.I.add_dev_dependencies_args("ruff", "mypy").run()
+    ```
+  </Tab>
+</Tabs>
+
+### Dependency Updates
+
+```python
+def update_dependencies_args(self, *args: str) -> Args:
+    """Construct uv lock arguments for updating dependencies.
+    
+    Returns:
+        Args for 'uv lock --upgrade'.
+    """
+    return self.args("lock", "--upgrade", *args)
+
+# Usage
+PackageManager.I.update_dependencies_args().run()
+
+# Update specific packages
+PackageManager.I.update_dependencies_args("--upgrade-package", "requests").run()
+```
+
+## Running Commands
+
+### Basic Run
+
+```python
+def run_args(self, *args: str) -> Args:
+    """Construct uv run arguments.
+    
+    Returns:
+        Args for 'uv run'.
+    """
+    return self.args("run", *args)
+
+# Usage
+PackageManager.I.run_args("python", "script.py").run()
+PackageManager.I.run_args("pytest").run()
+```
+
+### Run Without Dev Dependencies
+
+```python
+def run_no_dev_args(self, *args: str) -> Args:
+    """Construct uv run arguments without dev dependencies.
+    
+    Returns:
+        Args for 'uv run --no-group dev'.
+    """
+    return self.run_args("--no-group", "dev", *args)
+
+# Usage for production-like environment
+PackageManager.I.run_no_dev_args("python", "-m", "myapp").run()
+```
+
+## Version Management
+
+<CodeGroup>
+```python Get Version
+def version_args(self, *args: str) -> Args:
+    """Construct uv version arguments.
+    
+    Returns:
+        Args for 'uv version'.
+    """
+    return self.args("version", *args)
+
+# Usage
+result = PackageManager.I.version_args().run()
+print(result.stdout)
+```
+
+```python Short Version
+def version_short_args(self, *args: str) -> Args:
+    """Construct uv version arguments with short output.
+    
+    Returns:
+        Args for 'uv version --short'.
+    """
+    return self.version_args("--short", *args)
+
+# Usage
+result = PackageManager.I.version_short_args().run()
+version = result.stdout.strip()
+```
+
+```python Patch Version Bump
+def patch_version_args(self, *args: str) -> Args:
+    """Construct uv version arguments for patch bump.
+    
+    Returns:
+        Args for 'uv version --bump patch'.
+    """
+    return self.args("version", "--bump", "patch", *args)
+
+# Usage
+PackageManager.I.patch_version_args().run()
+```
+</CodeGroup>
+
+## Building and Publishing
+
+### Build Package
+
+```python
+def build_args(self, *args: str) -> Args:
+    """Construct uv build arguments.
+    
+    Returns:
+        Args for 'uv build'.
+    """
+    return self.args("build", *args)
+
+# Usage
+PackageManager.I.build_args().run()
+
+# Build with specific output directory
+PackageManager.I.build_args("--out-dir", "dist/").run()
+```
+
+### Publish Package
+
+```python
+def publish_args(self, *args: str, token: str) -> Args:
+    """Construct uv publish arguments with token.
+    
+    Args:
+        *args: Additional publish command arguments.
+        token: Authentication token (keyword-only).
+    
+    Returns:
+        Args for 'uv publish --token <token>'.
+    """
+    return self.args("publish", "--token", token, *args)
+
+# Usage
+import os
+token = os.getenv("PYPI_TOKEN")
+PackageManager.I.publish_args(token=token).run()
+```
+
+## Maintenance
+
+### Update UV
+
+```python
+def update_self_args(self, *args: str) -> Args:
+    """Construct uv self update arguments.
+    
+    Returns:
+        Args for 'uv self update'.
+    """
+    return self.args("self", "update", *args)
+
+# Usage
+PackageManager.I.update_self_args().run()
+```
+
+## Configuration
+
+### Disable Auto-Install
+
+```python
+def no_auto_install_env_var(self) -> str:
+    """Get environment variable name for disabling automatic dependency installing.
+    
+    UV normally runs 'uv sync' implicitly before commands like 'uv run' when
+    the venv is out of date. Setting this env var to '1' disables that behaviour.
+    
+    Returns:
+        'UV_NO_SYNC'
+    """
+    return "UV_NO_SYNC"
+
+# Usage
+import os
+os.environ[PackageManager.I.no_auto_install_env_var()] = "1"
+PackageManager.I.run_args("pytest").run()
+```
+
+### Build System Configuration
+
+```python
+def build_system_requires(self) -> list[str]:
+    """Get build-system requires for pyproject.toml.
+    
+    Returns:
+        List of dependencies for [build-system].requires.
+    """
+    return ["uv_build"]
+
+def build_backend(self) -> str:
+    """Get build-backend for pyproject.toml.
+    
+    Returns:
+        Build backend for [build-system].build-backend.
+    """
+    return "uv_build"
+
+# Usage in pyproject.toml generation
+requires = PackageManager.I.build_system_requires()
+backend = PackageManager.I.build_backend()
+```
+
+## Helper Methods
+
+### Project Names
+
+```python
+def project_name(self) -> str:
+    """Get the name of the project."""
+    return project_name_from_cwd()
+
+def package_name(self) -> str:
+    """Get the main package of the project."""
+    return kebab_to_snake_case(self.project_name())
+
+# Usage
+print(f"Project: {PackageManager.I.project_name()}")  # my-project
+print(f"Package: {PackageManager.I.package_name()}")  # my_project
+```
+
+## Customization
+
+Override methods to customize behavior:
+
+```python
+from pyrig.rig.tools.package_manager import PackageManager
+from pyrig.src.processes import Args
+
+class PoetryPackageManager(PackageManager):
+    """Use Poetry instead of UV."""
+    
+    def name(self) -> str:
+        return "poetry"
+    
+    def install_dependencies_args(self, *args: str) -> Args:
+        return self.args("install", *args)
+    
+    def add_dependencies_args(self, *args: str) -> Args:
+        return self.args("add", *args)
+    
+    def build_system_requires(self) -> list[str]:
+        return ["poetry-core"]
+    
+    def build_backend(self) -> str:
+        return "poetry.core.masonry.api"
+```
+
+## Complete Example
+
+```python
+from pyrig.rig.tools.package_manager import PackageManager
+
+# Initialize a new project
+PackageManager.I.init_project_args().run()
+
+# Install dependencies
+PackageManager.I.install_dependencies_args().run()
+
+# Add production dependencies
+PackageManager.I.add_dependencies_args(
+    "fastapi",
+    "uvicorn",
+    "pydantic>=2.0"
+).run()
+
+# Add development dependencies
+PackageManager.I.add_dev_dependencies_args(
+    "pytest",
+    "pytest-cov",
+    "ruff"
+).run()
+
+# Run tests
+PackageManager.I.run_args("pytest").run()
+
+# Update all dependencies
+PackageManager.I.update_dependencies_args().run()
+
+# Bump version
+PackageManager.I.patch_version_args().run()
+
+# Build package
+PackageManager.I.build_args().run()
+```
+
+## See Also
+
+<CardGroup cols={2}>
+  <Card title="UV Documentation" icon="book" href="https://github.com/astral-sh/uv">
+    Official UV documentation
+  </Card>
+  <Card title="Version Controller" icon="code-branch" href="/tools/version-controller">
+    Git wrapper for version control
+  </Card>
+  <Card title="Tools Overview" icon="wrench" href="/tools/overview">
+    Learn about the Tool pattern
+  </Card>
+  <Card title="Project Tester" icon="vial" href="/tools/project-tester">
+    Run tests with pytest
+  </Card>
+</CardGroup>

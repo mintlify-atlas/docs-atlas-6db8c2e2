@@ -1,0 +1,147 @@
+---
+title: CLI Reference Overview
+description: Complete reference for pyrig's command-line interface
+---
+
+pyrig provides a comprehensive CLI for project initialization, configuration management, and build automation. All commands support verbosity flags for flexible logging output.
+
+## Quick Reference
+
+```bash
+uv run pyrig init           # Full project initialization
+uv run pyrig mkroot         # Create/update all config files
+uv run pyrig mktests        # Generate test skeletons
+uv run pyrig mkinits        # Create missing __init__.py files
+uv run pyrig build          # Build artifacts (PyInstaller, etc.)
+uv run pyrig protect-repo   # Configure repository protection
+uv run pyrig scratch        # Execute the project's .scratch file
+uv run pyrig rmpyc          # Remove __pycache__ directories
+```
+
+## Global Options
+
+All pyrig commands support verbosity control through global flags:
+
+### Verbosity Flags
+
+<ParamField path="-v" type="flag">
+  Debug output with level prefix. Can be stacked for more detail.
+  
+  ```bash
+  uv run pyrig -v mkroot      # DEBUG level with level prefix
+  uv run pyrig -vv mkroot     # DEBUG level with module names
+  uv run pyrig -vvv mkroot    # DEBUG level with timestamps
+  ```
+</ParamField>
+
+<ParamField path="-q" type="flag">
+  Quiet mode - only show warnings and errors (WARNING level).
+  
+  ```bash
+  uv run pyrig -q init
+  ```
+</ParamField>
+
+### Logging Levels
+
+| Flag | Level | Format | Use Case |
+|------|-------|--------|----------|
+| (none) | INFO | Clean messages only | Default, production use |
+| `-q` | WARNING | Level prefix + message | Minimal output |
+| `-v` | DEBUG | Level prefix + message | Basic debugging |
+| `-vv` | DEBUG | Level + module + message | Module-level debugging |
+| `-vvv` | DEBUG | Timestamp + level + module + message | Full diagnostic output |
+
+## Command Categories
+
+### Project Setup
+
+- **[init](/cli/commands/init)** - Complete project initialization from scratch
+- **[mkroot](/cli/commands/mkroot)** - Create/update configuration files
+- **[mkinits](/cli/commands/mkinits)** - Generate missing `__init__.py` files
+
+### Development
+
+- **[mktests](/cli/commands/mktests)** - Generate test skeletons
+- **[scratch](/cli/commands/scratch)** - Execute temporary `.scratch` file
+- **[rmpyc](/cli/commands/rmpyc)** - Clean up `__pycache__` directories
+
+### Build & Deployment
+
+- **[build](/cli/commands/build)** - Build distributable artifacts
+- **[protect-repo](/cli/commands/protect-repo)** - Configure GitHub security
+
+## Usage Patterns
+
+### First-Time Setup
+
+```bash
+cd my-project
+uv init
+uv add pyrig
+uv run pyrig init
+```
+
+### Updating Configuration
+
+```bash
+# After modifying ConfigFile subclasses
+uv run pyrig mkroot
+```
+
+### Development Workflow
+
+```bash
+# Add new modules
+uv run pyrig mkinits    # Create __init__.py files
+uv run pyrig mktests    # Generate test skeletons
+```
+
+### Building for Distribution
+
+```bash
+uv run pyrig build
+# Artifacts created in dist/ with platform-specific names
+```
+
+## Command Discovery
+
+pyrig's CLI uses dynamic command discovery:
+
+1. **Project-specific commands** - Functions in `<package>.rig.cli.subcommands`
+2. **Shared commands** - Functions in `<package>.rig.cli.shared_subcommands` across the dependency chain
+3. **Main entry point** - `main()` function from `<package>.main`
+
+This enables creating custom commands that are automatically registered:
+
+```python
+# myproject/rig/cli/subcommands.py
+def deploy() -> None:
+    """Deploy the application."""
+    ...
+```
+
+```bash
+$ uv run myproject deploy
+```
+
+<Note>
+  All commands are idempotent and safe to run multiple times unless explicitly noted otherwise.
+</Note>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="init Command" icon="rocket" href="/cli/commands/init">
+    Initialize a complete pyrig project
+  </Card>
+  <Card title="mkroot Command" icon="folder-tree" href="/cli/commands/mkroot">
+    Generate configuration files
+  </Card>
+  <Card title="build Command" icon="box" href="/cli/commands/build">
+    Build distributable artifacts
+  </Card>
+  <Card title="mktests Command" icon="flask" href="/cli/commands/mktests">
+    Generate test skeletons
+  </Card>
+</CardGroup>

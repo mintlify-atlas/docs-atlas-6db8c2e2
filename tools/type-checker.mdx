@@ -1,0 +1,489 @@
+---
+title: Type Checker
+description: Ty type checker wrapper for Python type safety
+---
+
+## Overview
+
+The `TypeChecker` class provides a type-safe wrapper around [Ty](https://github.com/astral-sh/ty), Astral's extremely fast Python type checker written in Rust. Ty provides type checking capabilities to catch type-related errors before runtime.
+
+## Location
+
+`pyrig.rig.tools.type_checker.TypeChecker` (rig/tools/type_checker.py:15)
+
+## Quick Start
+
+```python
+from pyrig.rig.tools.type_checker import TypeChecker
+
+# Check entire project
+TypeChecker.I.check_args().run()
+
+# Check specific directory
+TypeChecker.I.check_args("src/").run()
+
+# Check specific files
+TypeChecker.I.check_args("src/main.py", "tests/test_main.py").run()
+```
+
+## Type Checking
+
+### Basic Check
+
+```python
+def check_args(self, *args: str) -> Args:
+    """Construct ty check arguments.
+    
+    Args:
+        *args: Check command arguments.
+    
+    Returns:
+        Args for 'ty check'.
+    """
+    return self.args("check", *args)
+
+# Usage - check entire project
+TypeChecker.I.check_args().run()
+
+# Check specific directory
+TypeChecker.I.check_args("src/").run()
+
+# Check specific files
+TypeChecker.I.check_args(
+    "src/main.py",
+    "src/utils.py",
+    "tests/test_main.py"
+).run()
+```
+
+## Common Workflows
+
+### Pre-commit Type Check
+
+```python
+from pyrig.rig.tools.type_checker import TypeChecker
+
+def pre_commit_type_check() -> bool:
+    """Run type checking before commit."""
+    result = TypeChecker.I.check_args().run(check=False)
+    
+    if result.returncode != 0:
+        print("Type checking failed:")
+        print(result.stdout)
+        return False
+    
+    print("✓ Type checking passed")
+    return True
+
+if not pre_commit_type_check():
+    print("Please fix type errors before committing")
+```
+
+### CI/CD Type Check
+
+```python
+from pyrig.rig.tools.type_checker import TypeChecker
+import sys
+
+def ci_type_check():
+    """Run type checking in CI/CD pipeline."""
+    print("Running type checker...")
+    result = TypeChecker.I.check_args().run(check=False)
+    
+    if result.returncode != 0:
+        print("✗ Type checking failed")
+        print(result.stdout)
+        sys.exit(1)
+    
+    print("✓ Type checking passed")
+
+ci_type_check()
+```
+
+### Incremental Type Checking
+
+```python
+from pyrig.rig.tools.type_checker import TypeChecker
+from pyrig.rig.tools.version_controller import VersionController
+
+def check_changed_files():
+    """Type check only modified files."""
+    # Get list of changed files
+    result = VersionController.I.diff_args("--name-only").run()
+    changed_files = [
+        f for f in result.stdout.strip().split('\n')
+        if f.endswith('.py')
+    ]
+    
+    if not changed_files:
+        print("No Python files changed")
+        return
+    
+    print(f"Checking {len(changed_files)} changed files...")
+    result = TypeChecker.I.check_args(*changed_files).run(check=False)
+    
+    if result.returncode != 0:
+        print("Type errors found in changed files")
+    else:
+        print("✓ All changed files pass type checking")
+
+check_changed_files()
+```
+
+## Integration with Other Tools
+
+### With Linter
+
+```python
+from pyrig.rig.tools.type_checker import TypeChecker
+from pyrig.rig.tools.linter import Linter
+
+def code_quality_check() -> bool:
+    """Run comprehensive code quality checks."""
+    success = True
+    
+    # Run linter
+    print("Running linter...")
+    result = Linter.I.check_args().run(check=False)
+    if result.returncode != 0:
+        print("✗ Linting failed")
+        success = False
+    else:
+        print("✓ Linting passed")
+    
+    # Run type checker
+    print("Running type checker...")
+    result = TypeChecker.I.check_args().run(check=False)
+    if result.returncode != 0:
+        print("✗ Type checking failed")
+        success = False
+    else:
+        print("✓ Type checking passed")
+    
+    return success
+
+if code_quality_check():
+    print("All quality checks passed!")
+```
+
+### With Package Manager
+
+```python
+from pyrig.rig.tools.type_checker import TypeChecker
+from pyrig.rig.tools.package_manager import PackageManager
+
+# Ensure ty is installed
+PackageManager.I.add_dev_dependencies_args("ty").run()
+
+# Run type checker via uv run (ensures correct environment)
+PackageManager.I.run_args("ty", "check").run()
+
+# Or use the TypeChecker wrapper directly
+TypeChecker.I.check_args().run()
+```
+
+### With Project Tester
+
+```python
+from pyrig.rig.tools.type_checker import TypeChecker
+from pyrig.rig.tools.project_tester import ProjectTester
+
+def test_with_type_check():
+    """Run tests and type checking."""
+    # Type check first
+    print("Type checking...")
+    type_result = TypeChecker.I.check_args().run(check=False)
+    
+    # Run tests
+    print("Running tests...")
+    test_result = ProjectTester.I.run_tests_in_ci_args().run(check=False)
+    
+    # Report results
+    if type_result.returncode == 0 and test_result.returncode == 0:
+        print("✓ Type checking and tests passed")
+    else:
+        if type_result.returncode != 0:
+            print("✗ Type checking failed")
+        if test_result.returncode != 0:
+            print("✗ Tests failed")
+
+test_with_type_check()
+```
+
+## Handling Type Errors
+
+### Capture and Parse Output
+
+```python
+from pyrig.rig.tools.type_checker import TypeChecker
+
+def analyze_type_errors():
+    """Analyze and report type errors."""
+    result = TypeChecker.I.check_args().run(check=False)
+    
+    if result.returncode == 0:
+        print("No type errors found!")
+        return
+    
+    # Parse output
+    errors = result.stdout.strip().split('\n')
+    print(f"Found {len(errors)} type errors:")
+    
+    for error in errors:
+        print(f"  - {error}")
+
+analyze_type_errors()
+```
+
+### Selective Type Checking
+
+```python
+from pyrig.rig.tools.type_checker import TypeChecker
+import os
+
+def check_source_only():
+    """Type check only source code, not tests."""
+    if os.path.exists("src"):
+        print("Checking src/ directory...")
+        TypeChecker.I.check_args("src/").run()
+    else:
+        print("Checking all .py files...")
+        TypeChecker.I.check_args().run()
+
+check_source_only()
+```
+
+## Configuration
+
+Ty automatically reads configuration from `pyproject.toml`:
+
+```toml
+# pyproject.toml
+[tool.ty]
+python-version = "3.11"
+strict = true
+disallow-untyped-defs = true
+disallow-any-generics = true
+warn-unused-ignores = true
+warn-redundant-casts = true
+```
+
+Ty will use these settings automatically:
+
+```python
+# Uses configuration from pyproject.toml
+TypeChecker.I.check_args().run()
+```
+
+## Advanced Usage
+
+### Check with Additional Options
+
+```python
+# Type check with verbose output
+TypeChecker.I.check_args("--verbose").run()
+
+# Type check with specific Python version
+TypeChecker.I.check_args("--python-version", "3.11").run()
+
+# Type check with strict mode
+TypeChecker.I.check_args("--strict").run()
+```
+
+### Exit Code Handling
+
+```python
+from pyrig.rig.tools.type_checker import TypeChecker
+
+result = TypeChecker.I.check_args().run(check=False)
+
+if result.returncode == 0:
+    print("Type checking passed")
+elif result.returncode == 1:
+    print("Type errors found")
+    print(result.stdout)
+else:
+    print(f"Type checker failed with code {result.returncode}")
+    print(result.stderr)
+```
+
+## Customization
+
+Override methods to customize type checker behavior:
+
+```python
+from pyrig.rig.tools.type_checker import TypeChecker
+from pyrig.src.processes import Args
+
+class StrictTypeChecker(TypeChecker):
+    """Type checker with strict defaults."""
+    
+    def check_args(self, *args: str) -> Args:
+        """Always use strict mode."""
+        return super().check_args(
+            "--strict",
+            "--disallow-untyped-defs",
+            "--warn-redundant-casts",
+            *args
+        )
+
+# Use custom type checker
+StrictTypeChecker.I.check_args().run()
+```
+
+## Tool Configuration
+
+```python
+# Get tool name
+TypeChecker.I.name()  # Returns: 'ty'
+
+# Get tool group
+TypeChecker.I.group()  # Returns: 'code-quality'
+
+# Get badge URLs for README
+badge_url, project_url = TypeChecker.I.badge_urls()
+# badge_url: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ty/main/assets/badge/v0.json
+# project_url: https://github.com/astral-sh/ty
+
+# Get dev dependencies
+TypeChecker.I.dev_dependencies()  # Returns: ('ty',)
+```
+
+## Complete Example
+
+```python
+from pyrig.rig.tools.type_checker import TypeChecker
+from pyrig.rig.tools.linter import Linter
+from pyrig.rig.tools.project_tester import ProjectTester
+from pyrig.rig.tools.version_controller import VersionController
+import sys
+
+def pre_push_validation():
+    """Comprehensive validation before pushing."""
+    print("=" * 50)
+    print("Running pre-push validation...")
+    print("=" * 50)
+    
+    all_passed = True
+    
+    # 1. Format check
+    print("\n1. Checking code format...")
+    result = Linter.I.format_args("--check").run(check=False)
+    if result.returncode != 0:
+        print("  ✗ Code needs formatting")
+        all_passed = False
+    else:
+        print("  ✓ Format check passed")
+    
+    # 2. Linting
+    print("\n2. Running linter...")
+    result = Linter.I.check_args().run(check=False)
+    if result.returncode != 0:
+        print("  ✗ Linting failed")
+        all_passed = False
+    else:
+        print("  ✓ Linting passed")
+    
+    # 3. Type checking
+    print("\n3. Running type checker...")
+    result = TypeChecker.I.check_args().run(check=False)
+    if result.returncode != 0:
+        print("  ✗ Type checking failed")
+        all_passed = False
+    else:
+        print("  ✓ Type checking passed")
+    
+    # 4. Tests
+    print("\n4. Running tests...")
+    result = ProjectTester.I.run_tests_in_ci_args().run(check=False)
+    if result.returncode != 0:
+        print("  ✗ Tests failed")
+        all_passed = False
+    else:
+        print("  ✓ Tests passed")
+    
+    # 5. Check for uncommitted changes
+    print("\n5. Checking for uncommitted changes...")
+    if VersionController.I.has_unstaged_diff():
+        print("  ✗ Uncommitted changes detected")
+        all_passed = False
+    else:
+        print("  ✓ No uncommitted changes")
+    
+    print("\n" + "=" * 50)
+    if all_passed:
+        print("✓ All validation checks passed!")
+        print("=" * 50)
+    else:
+        print("✗ Some validation checks failed")
+        print("=" * 50)
+        sys.exit(1)
+
+pre_push_validation()
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Add type hints incrementally">
+    Start by type checking your main modules, then gradually add type hints to more files:
+    
+    ```python
+    # Start with core modules
+    TypeChecker.I.check_args("src/main.py", "src/core.py").run()
+    
+    # Expand gradually
+    TypeChecker.I.check_args("src/").run()
+    ```
+  </Accordion>
+  
+  <Accordion title="Use type checking in CI/CD">
+    Always run type checking in your CI/CD pipeline:
+    
+    ```python
+    # In your CI script
+    result = TypeChecker.I.check_args().run(check=False)
+    if result.returncode != 0:
+        sys.exit(1)
+    ```
+  </Accordion>
+  
+  <Accordion title="Combine with other quality tools">
+    Type checking works best alongside linting and testing:
+    
+    ```python
+    # Quality check pipeline
+    Linter.I.check_args().run()
+    TypeChecker.I.check_args().run()
+    ProjectTester.I.run_tests_in_ci_args().run()
+    ```
+  </Accordion>
+  
+  <Accordion title="Handle type checker errors gracefully">
+    Use `check=False` to handle errors without exceptions:
+    
+    ```python
+    result = TypeChecker.I.check_args().run(check=False)
+    if result.returncode != 0:
+        # Handle errors gracefully
+        print("Type errors found, but continuing...")
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## See Also
+
+<CardGroup cols={2}>
+  <Card title="Ty Documentation" icon="book" href="https://github.com/astral-sh/ty">
+    Official Ty documentation
+  </Card>
+  <Card title="Linter" icon="broom" href="/tools/linter">
+    Ruff linter and formatter wrapper
+  </Card>
+  <Card title="Tools Overview" icon="wrench" href="/tools/overview">
+    Learn about the Tool pattern
+  </Card>
+  <Card title="Project Tester" icon="vial" href="/tools/project-tester">
+    Run tests with pytest
+  </Card>
+</CardGroup>

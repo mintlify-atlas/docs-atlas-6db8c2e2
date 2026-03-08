@@ -1,0 +1,383 @@
+---
+title: CLI API
+description: Dynamic command registration and discovery for extensible CLIs
+---
+
+The CLI API provides a complete framework for building extensible command-line applications with automatic command discovery and registration.
+
+## Core Components
+
+### Main Entry Point
+
+<ParamField path="pyrig.rig.cli.cli.main" type="function">
+  Main CLI entry point that orchestrates command discovery and registration.
+  
+  **Steps:**
+  1. Discovers and registers project-specific commands
+  2. Discovers and registers shared commands
+  3. Invokes Typer app to parse arguments and execute command
+  
+  **Example:**
+  ```bash
+  $ uv run pyrig mkroot
+  ```
+</ParamField>
+
+### Typer Application
+
+<ParamField path="pyrig.rig.cli.cli.app" type="typer.Typer">
+  Main Typer application instance.
+  
+  Root Typer app that all commands are registered to. Configured with `no_args_is_help=True` to display help when invoked without a command.
+  
+  **Usage:**
+  ```python
+  from pyrig.rig.cli.cli import app
+  
+  # Register a custom command
+  @app.command()
+  def mycmd() -> None:
+      """My custom command."""
+      ...
+  ```
+</ParamField>
+
+## Command Discovery
+
+### Project Commands
+
+<ParamField path="pyrig.rig.cli.cli.add_subcommands" type="function">
+  Discover and register project-specific CLI commands.
+  
+  **Discovers:**
+  1. Main entry point: `main()` from `<package>.main`
+  2. Subcommands: All functions from `<package>.rig.cli.subcommands`
+  
+  **Discovery Process:**
+  1. Extracts package name from `sys.argv[0]`
+  2. Replaces root module name in pyrig's paths with current package
+  3. Imports modules with fallback handling
+  4. Extracts all functions from subcommands module
+  5. Registers each function as a Typer command
+  
+  **Example:**
+  ```python
+  # myproject/rig/cli/subcommands.py
+  def deploy() -> None:
+      '''Deploy the application.'''
+      ...
+  
+  # Available as:
+  $ uv run myproject deploy
+  ```
+</ParamField>
+
+### Shared Commands
+
+<ParamField path="pyrig.rig.cli.cli.add_shared_subcommands" type="function">
+  Discover and register shared CLI commands from the dependency chain.
+  
+  Commands defined in `<package>.rig.cli.shared_subcommands` modules are automatically available in all dependent projects.
+  
+  **Discovery Process:**
+  1. Extracts current package name from `sys.argv[0]`
+  2. Imports current package
+  3. Finds all packages in dependency chain from pyrig to current package
+  4. For each package, looks for `rig.cli.shared_subcommands` module
+  5. Extracts all public functions from each module
+  6. Registers each function as a Typer command
+  
+  **Example:**
+  ```python
+  # pyrig/rig/cli/shared_subcommands.py
+  def version() -> None:
+      '''Display the current project's version.'''
+      project_name = project_name_from_argv()
+      typer.echo(f"{project_name} version {_version(project_name)}")
+  
+  # Available in all projects:
+  $ uv run pyrig version
+  pyrig version 3.1.5
+  
+  $ uv run myproject version
+  myproject version 1.2.3
+  ```
+</ParamField>
+
+## Logging Configuration
+
+<ParamField path="pyrig.rig.cli.cli.configure_logging" type="callback">
+  Configure logging based on verbosity flags.
+  
+  Typer callback that runs before any command executes. Configures the Python logging system based on user-provided verbosity flags.
+  
+  **Parameters:**
+  <ParamField path="verbose" type="int" default="0">
+    Verbosity level from number of `-v` flags.
+    - `0`: INFO level (default)
+    - `1`: DEBUG level with level prefix
+    - `2`: DEBUG level with module names
+    - `3+`: DEBUG level with timestamps and full details
+  </ParamField>
+  
+  <ParamField path="quiet" type="bool" default="False">
+    If True, sets WARNING level. Takes precedence over verbose.
+  </ParamField>
+  
+  **Logging Levels:**
+  - **Default**: INFO level, clean formatting (just messages)
+  - **`-q/--quiet`**: WARNING level (only warnings and errors)
+  - **`-v`**: DEBUG level with level prefix
+  - **`-vv`**: DEBUG level with module names
+  - **`-vvv+`**: DEBUG level with timestamps and full details
+  
+  **Examples:**
+  ```bash
+  # Default INFO level
+  $ uv run pyrig mkroot
+  
+  # Debug with level prefix
+  $ uv run pyrig -v mkroot
+  
+  # Debug with module names
+  $ uv run pyrig -vv mkroot
+  
+  # Debug with timestamps
+  $ uv run pyrig -vvv mkroot
+  
+  # Quiet mode (warnings only)
+  $ uv run pyrig -q mkroot
+  ```
+</ParamField>
+
+## Built-in Commands
+
+Pyrig includes several built-in commands in `pyrig.rig.cli.subcommands`:
+
+### mkroot
+
+<ParamField path="pyrig.rig.cli.subcommands.mkroot" type="command">
+  Create or update project configuration files and directory structure.
+  
+  Discovers all ConfigFile subclasses across the project and its dependencies, then validates each one to create or update configuration files. Generates the complete project structure including pyproject.toml, .gitignore, GitHub workflows, pre-commit hooks, and other configuration files.
+  
+  The command is idempotent: safe to run multiple times, overwrites incorrect files but respects opt-out markers.
+  
+  **Example:**
+  ```bash
+  $ uv run pyrig mkroot
+  ```
+</ParamField>
+
+### mktests
+
+<ParamField path="pyrig.rig.cli.subcommands.mktests" type="command">
+  Generate test skeleton files for all source code.
+  
+  Creates test files mirroring the source package structure. For each module, class, function, and method in the source code, generates corresponding test skeletons with `NotImplementedError` placeholders.
+  
+  **Naming Conventions:**
+  - Test modules: `test_<module_name>.py`
+  - Test classes: `Test<ClassName>`
+  - Test functions: `test_<function_name>`
+  - Test methods: `test_<method_name>`
+  
+  The command is idempotent and non-destructive: safe to run multiple times, only adds new test skeletons for untested code, preserves all existing tests.
+  
+  **Example:**
+  ```bash
+  $ uv run pyrig mktests
+  ```
+</ParamField>
+
+### mkinits
+
+<ParamField path="pyrig.rig.cli.subcommands.mkinits" type="command">
+  Create missing __init__.py files for all namespace packages.
+  
+  Scans the project for namespace packages (directories with Python files but no __init__.py) and creates minimal __init__.py files for them. Ensures all packages follow traditional Python package conventions and are properly importable.
+  
+  The command is idempotent and non-destructive: safe to run multiple times, only creates missing files, never modifies existing ones.
+  
+  **Example:**
+  ```bash
+  $ uv run pyrig mkinits
+  ```
+</ParamField>
+
+### init
+
+<ParamField path="pyrig.rig.cli.subcommands.init" type="command">
+  Initialize a complete pyrig project from scratch.
+  
+  Transforms a basic Python project into a fully-configured, production-ready pyrig project through a comprehensive automated sequence.
+  
+  **Steps executed in order:**
+  1. Initialize version control (git init)
+  2. Add development dependencies (uv add --group dev)
+  3. Sync virtual environment (uv sync)
+  4. Create project root (mkroot)
+  5. Sync virtual environment again (apply new configs)
+  6. Generate test skeletons (mktests)
+  7. Install pre-commit hooks (pre-commit install)
+  8. Add all files to version control (git add .)
+  9. Run pre-commit hooks (format/lint all files)
+  10. Run test suite (pytest)
+  11. Create initial git commit
+  
+  **Example:**
+  ```bash
+  $ cd my-project
+  $ uv init
+  $ uv add pyrig
+  $ uv run pyrig init
+  ```
+</ParamField>
+
+### build
+
+<ParamField path="pyrig.rig.cli.subcommands.build" type="command">
+  Build all distributable artifacts for the project.
+  
+  Discovers and invokes all BuilderConfigFile subclasses across the project and its dependencies to create distributable artifacts (e.g., PyInstaller executables, documentation archives, custom build processes).
+  
+  **Build Process:**
+  1. Discovers all non-abstract BuilderConfigFile subclasses
+  2. Validates each builder (triggers build via `dump()`)
+  3. Creates artifacts in temporary directories
+  4. Renames with platform-specific suffixes (e.g., `-Linux`, `-Windows`)
+  5. Moves artifacts to `dist/` directory
+  
+  Builders within the same priority group execute in parallel. Priority groups are processed sequentially (highest first).
+  
+  **Example:**
+  ```bash
+  $ uv run pyrig build
+  ```
+</ParamField>
+
+### protect-repo
+
+<ParamField path="pyrig.rig.cli.subcommands.protect_repo" type="command">
+  Configure GitHub repository protection rules and security settings.
+  
+  Applies comprehensive security protections to the GitHub repository, including repository-level settings and branch protection rulesets.
+  
+  **Repository Settings:**
+  - Description from pyproject.toml
+  - Default branch set to 'main'
+  - Delete branches on merge enabled
+  - Merge commits disabled (squash and rebase only)
+  
+  **Branch Protection Rules:**
+  - Required pull request reviews with code owner approval
+  - Required status checks (health check workflow must pass)
+  - Linear commit history required
+  - Signed commits required
+  - Force pushes and branch deletions disabled
+  
+  **Requirements:**
+  Requires `REPO_TOKEN` environment variable with `repo` scope permissions.
+  
+  **Example:**
+  ```bash
+  $ export REPO_TOKEN=ghp_...
+  $ uv run pyrig protect-repo
+  ```
+</ParamField>
+
+### scratch
+
+<ParamField path="pyrig.rig.cli.subcommands.scratch" type="command">
+  Execute the .scratch file for temporary, ad-hoc code.
+  
+  The .scratch file is a Python script located at the project root, intended for temporary, experimental code that doesn't belong in the main source files.
+  
+  **Example:**
+  ```bash
+  $ uv run pyrig scratch
+  ```
+</ParamField>
+
+### rmpyc
+
+<ParamField path="pyrig.rig.cli.subcommands.rmpyc" type="command">
+  Remove all __pycache__ directories and their contents from the project.
+  
+  Recursively searches the project directory for any __pycache__ directories and deletes them along with their contents.
+  
+  **Example:**
+  ```bash
+  $ uv run pyrig rmpyc
+  ```
+</ParamField>
+
+## Creating Custom Commands
+
+### Project-Specific Commands
+
+Add functions to `<package>.rig.cli.subcommands`:
+
+```python
+# myproject/rig/cli/subcommands.py
+import typer
+
+def deploy() -> None:
+    """Deploy the application to production."""
+    typer.echo("Deploying...")
+    # Implementation
+
+def status() -> None:
+    """Check deployment status."""
+    typer.echo("Status: Running")
+    # Implementation
+```
+
+Commands are automatically discovered and registered:
+
+```bash
+$ uv run myproject deploy
+Deploying...
+
+$ uv run myproject status
+Status: Running
+```
+
+### Shared Commands
+
+Add functions to `<package>.rig.cli.shared_subcommands` for commands that should be available in all dependent projects:
+
+```python
+# myproject/rig/cli/shared_subcommands.py
+import typer
+from pyrig.src.cli import project_name_from_argv
+
+def info() -> None:
+    """Display project information."""
+    project_name = project_name_from_argv()
+    typer.echo(f"Project: {project_name}")
+```
+
+This command will be available in all projects that depend on myproject:
+
+```bash
+$ uv run myproject info
+Project: myproject
+
+$ uv run dependent-project info
+Project: dependent-project
+```
+
+## Best Practices
+
+1. **Use descriptive docstrings**: Docstrings become command help text
+2. **Leverage Typer features**: Use `typer.Option()` for arguments with validation
+3. **Handle errors gracefully**: Use `typer.echo()` for output, raise exceptions for errors
+4. **Keep commands focused**: Each command should do one thing well
+5. **Use shared commands sparingly**: Only for truly universal functionality
+6. **Test command functions**: Command functions are regular Python functions and can be tested directly
+
+## Related APIs
+
+- [Configuration API](/api/configs) - For managing project configuration files
+- [Tools API](/api/tools) - For wrapping external CLI tools

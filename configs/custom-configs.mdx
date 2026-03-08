@@ -1,0 +1,538 @@
+# Custom Configuration Files
+
+Learn how to create custom configuration files that integrate seamlessly with pyrig's configuration system.
+
+## Overview
+
+Pyrig's configuration system automatically discovers and manages any `ConfigFile` subclass in your project. Create custom configurations for:
+
+- Application-specific settings
+- Custom tool configurations
+- Project templates
+- CI/CD configurations
+- Documentation files
+
+## Basic Custom Configuration
+
+### Step 1: Choose a Base Class
+
+Select the appropriate base class for your file format:
+
+- `TomlConfigFile` - For TOML files (`.toml`)
+- `YamlConfigFile` - For YAML files (`.yaml`, `.yml`)
+- `JsonConfigFile` - For JSON files (`.json`)
+- `PythonConfigFile` - For Python files (`.py`)
+- `MarkdownConfigFile` - For Markdown files (`.md`)
+- `StringConfigFile` - For plain text files (`.txt`, `.env`, etc.)
+
+### Step 2: Create Your Config Class
+
+Create a new file in your project's `rig/configs/` directory:
+
+```python
+# myapp/rig/configs/myconfig.py
+from pathlib import Path
+from pyrig.rig.configs.base.toml import TomlConfigFile
+from pyrig.rig.configs.base.base import ConfigDict
+
+class MyConfigFile(TomlConfigFile):
+    """Manages myconfig.toml for application settings."""
+
+    def parent_path(self) -> Path:
+        """Place in project root."""
+        return Path()
+
+    def _configs(self) -> ConfigDict:
+        """Define expected configuration."""
+        return {
+            "app": {
+                "name": "myapp",
+                "version": "1.0.0",
+                "debug": False,
+            },
+            "database": {
+                "host": "localhost",
+                "port": 5432,
+            },
+        }
+```
+
+### Step 3: Initialize
+
+Run `uv run pyrig mkroot` to create the file:
+
+```bash
+uv run pyrig mkroot
+```
+
+This creates `myconfig.toml` with your default configuration.
+
+## TOML Configuration Example
+
+### Database Configuration
+
+```python
+# myapp/rig/configs/database.py
+from pathlib import Path
+from pyrig.rig.configs.base.toml import TomlConfigFile
+from pyrig.rig.configs.base.base import ConfigDict
+
+class DatabaseConfigFile(TomlConfigFile):
+    """Manages database.toml configuration."""
+
+    def parent_path(self) -> Path:
+        """Place in config/ directory."""
+        return Path("config")
+
+    def _configs(self) -> ConfigDict:
+        """Define database configuration."""
+        return {
+            "database": {
+                "host": "localhost",
+                "port": 5432,
+                "name": "myapp",
+                "user": "postgres",
+                "pool": {
+                    "min_size": 10,
+                    "max_size": 20,
+                    "timeout": 30,
+                },
+            },
+            "redis": {
+                "host": "localhost",
+                "port": 6379,
+                "db": 0,
+            },
+        }
+```
+
+Generates `config/database.toml`:
+
+```toml
+[database]
+host = "localhost"
+port = 5432
+name = "myapp"
+user = "postgres"
+
+[database.pool]
+min_size = 10
+max_size = 20
+timeout = 30
+
+[redis]
+host = "localhost"
+port = 6379
+db = 0
+```
+
+## YAML Configuration Example
+
+### Custom GitHub Workflow
+
+```python
+# myapp/rig/configs/workflows/custom.py
+from pathlib import Path
+from pyrig.rig.configs.base.workflow import WorkflowConfigFile
+from pyrig.rig.configs.base.base import ConfigDict
+
+class CustomWorkflowConfigFile(WorkflowConfigFile):
+    """Custom workflow for deployment."""
+
+    def workflow_triggers(self) -> ConfigDict:
+        """Trigger on tag push."""
+        triggers = super().workflow_triggers()
+        triggers.update({
+            "push": {
+                "tags": ["v*"]
+            }
+        })
+        return triggers
+
+    def jobs(self) -> ConfigDict:
+        """Define deployment job."""
+        return self.job(
+            job_func=self.jobs,
+            steps=[
+                self.step_checkout_repository(),
+                self.step_setup_package_manager(python_version="3.13"),
+                self.step(
+                    step_func=self.step_deploy,
+                    run="echo 'Deploying application'",
+                ),
+            ],
+        )
+
+    def step_deploy(self) -> dict:
+        """Deployment step."""
+        return self.step(
+            step_func=self.step_deploy,
+            run="./deploy.sh",
+        )
+```
+
+## JSON Configuration Example
+
+### API Configuration
+
+```python
+# myapp/rig/configs/api.py
+from pathlib import Path
+from pyrig.rig.configs.base.json import DictJsonConfigFile
+from pyrig.rig.configs.base.base import ConfigDict
+
+class ApiConfigFile(DictJsonConfigFile):
+    """Manages api.json configuration."""
+
+    def parent_path(self) -> Path:
+        """Place in config/ directory."""
+        return Path("config")
+
+    def _configs(self) -> ConfigDict:
+        """Define API configuration."""
+        return {
+            "api": {
+                "base_url": "https://api.example.com",
+                "version": "v1",
+                "timeout": 30,
+                "retry": {
+                    "max_attempts": 3,
+                    "backoff_factor": 2,
+                },
+            },
+            "endpoints": [
+                {
+                    "name": "users",
+                    "path": "/users",
+                    "methods": ["GET", "POST"],
+                },
+                {
+                    "name": "posts",
+                    "path": "/posts",
+                    "methods": ["GET", "POST", "PUT", "DELETE"],
+                },
+            ],
+        }
+```
+
+Generates `config/api.json`:
+
+```json
+{
+    "api": {
+        "base_url": "https://api.example.com",
+        "version": "v1",
+        "timeout": 30,
+        "retry": {
+            "max_attempts": 3,
+            "backoff_factor": 2
+        }
+    },
+    "endpoints": [
+        {
+            "name": "users",
+            "path": "/users",
+            "methods": ["GET", "POST"]
+        },
+        {
+            "name": "posts",
+            "path": "/posts",
+            "methods": ["GET", "POST", "PUT", "DELETE"]
+        }
+    ]
+}
+```
+
+## Python Configuration Example
+
+### Custom CLI Subcommand
+
+```python
+# myapp/rig/configs/python/deploy_cmd.py
+from pathlib import Path
+from pyrig.rig.configs.base.python import PythonConfigFile
+
+class DeployCmdConfigFile(PythonConfigFile):
+    """Generates deploy.py CLI subcommand."""
+
+    def parent_path(self) -> Path:
+        """Place in myapp/rig/cli/ directory."""
+        from pyrig.rig.tools.package_manager import PackageManager
+        return Path(PackageManager.I.package_name()) / "rig" / "cli"
+
+    def _configs(self) -> str:
+        """Generate deploy command source."""
+        return '''
+"""Deploy command for production deployment."""
+
+import typer
+
+app = typer.Typer()
+
+@app.command()
+def deploy(
+    environment: str = typer.Option("production", help="Target environment"),
+    dry_run: bool = typer.Option(False, help="Run in dry-run mode"),
+) -> None:
+    """Deploy application to target environment.
+    
+    Args:
+        environment: Target environment (production, staging, dev).
+        dry_run: If True, simulate deployment without making changes.
+    """
+    if dry_run:
+        typer.echo(f"Dry-run: Would deploy to {environment}")
+    else:
+        typer.echo(f"Deploying to {environment}...")
+        # Deployment logic here
+        typer.echo("Deployment complete!")
+'''
+```
+
+## Markdown Configuration Example
+
+### Custom Documentation Page
+
+```python
+# myapp/rig/configs/markdown/docs/architecture.py
+from pathlib import Path
+from pyrig.rig.configs.base.markdown import MarkdownConfigFile
+
+class ArchitectureDocConfigFile(MarkdownConfigFile):
+    """Generates docs/architecture.md."""
+
+    def parent_path(self) -> Path:
+        """Place in docs/ directory."""
+        return Path("docs")
+
+    def filename(self) -> str:
+        """Use architecture.md."""
+        return "architecture"
+
+    def _configs(self) -> str:
+        """Generate architecture documentation."""
+        from pyrig.rig.tools.package_manager import PackageManager
+        project_name = PackageManager.I.project_name()
+        return f'''
+# Architecture
+
+Overview of {project_name} architecture.
+
+## Components
+
+### Core
+
+Core application logic.
+
+### API
+
+REST API endpoints.
+
+### Database
+
+PostgreSQL database layer.
+
+## Design Patterns
+
+- **Repository Pattern**: Data access abstraction
+- **Service Layer**: Business logic separation
+- **Dependency Injection**: Loose coupling
+'''
+```
+
+## Advanced: Priority-Based Validation
+
+Set higher priority for configs that others depend on:
+
+```python
+from pyrig.rig.configs.base.toml import TomlConfigFile
+from pyrig.rig.configs.base.base import ConfigDict, Priority
+
+class CoreConfigFile(TomlConfigFile):
+    """Core configuration that others read from."""
+
+    def priority(self) -> float:
+        """Validate early (higher priority)."""
+        return Priority.HIGH  # 30
+
+    def parent_path(self) -> Path:
+        return Path()
+
+    def _configs(self) -> ConfigDict:
+        return {
+            "core": {
+                "app_name": "myapp",
+                "version": "1.0.0",
+            }
+        }
+
+class DependentConfigFile(TomlConfigFile):
+    """Configuration that reads from CoreConfigFile."""
+
+    def priority(self) -> float:
+        """Validate after CoreConfigFile."""
+        return Priority.DEFAULT  # 0
+
+    def parent_path(self) -> Path:
+        return Path()
+
+    def _configs(self) -> ConfigDict:
+        """Read from CoreConfigFile."""
+        core_config = CoreConfigFile.I.load()
+        app_name = core_config["core"]["app_name"]
+        return {
+            "dependent": {
+                "parent_app": app_name,
+                "setting": "value",
+            }
+        }
+```
+
+## Advanced: Dynamic Configuration
+
+Generate configuration based on project state:
+
+```python
+from pathlib import Path
+from pyrig.rig.configs.base.toml import TomlConfigFile
+from pyrig.rig.configs.base.base import ConfigDict
+from pyrig.rig.configs.pyproject import PyprojectConfigFile
+
+class DynamicConfigFile(TomlConfigFile):
+    """Configuration that adapts to project settings."""
+
+    def parent_path(self) -> Path:
+        return Path()
+
+    def _configs(self) -> ConfigDict:
+        """Generate config based on pyproject.toml."""
+        pyproject = PyprojectConfigFile.I.load()
+        project_name = pyproject["project"]["name"]
+        python_version = pyproject["project"]["requires-python"]
+        
+        return {
+            "dynamic": {
+                "project": project_name,
+                "python": python_version,
+                "features": self.detect_features(),
+            }
+        }
+
+    def detect_features(self) -> list[str]:
+        """Detect enabled features from dependencies."""
+        pyproject = PyprojectConfigFile.I.load()
+        deps = pyproject["project"].get("dependencies", [])
+        features = []
+        if any("fastapi" in dep for dep in deps):
+            features.append("web")
+        if any("sqlalchemy" in dep for dep in deps):
+            features.append("database")
+        if any("pytest" in dep for dep in deps):
+            features.append("testing")
+        return features
+```
+
+## Override Existing Configuration
+
+Replace pyrig's default configuration with your own:
+
+```python
+# myapp/rig/configs/pyproject.py
+from pyrig.rig.configs.pyproject import PyprojectConfigFile as BasePyproject
+from pyrig.rig.configs.base.base import ConfigDict
+
+class PyprojectConfigFile(BasePyproject):
+    """Custom pyproject.toml with extra settings."""
+
+    def _configs(self) -> ConfigDict:
+        """Extend base configuration."""
+        config = super()._configs()
+        
+        # Add keywords
+        config["project"]["keywords"] = [
+            "cli",
+            "automation",
+            "devops",
+        ]
+        
+        # Add custom tool config
+        config["tool"]["myapp"] = {
+            "setting1": "value1",
+            "setting2": "value2",
+        }
+        
+        return config
+```
+
+Because this class has the same name as the base class and is in the same relative location (`rig.configs.pyproject`), it overrides the default configuration.
+
+## Best Practices
+
+### Structure
+
+1. **Organize by purpose**: Group related configs in subdirectories
+   - `myapp/rig/configs/database/` - Database configurations
+   - `myapp/rig/configs/api/` - API configurations
+   - `myapp/rig/configs/workflows/` - Custom workflows
+
+2. **Use descriptive names**: Name classes after their purpose
+   - `DatabaseConfigFile` not `DbCfg`
+   - `ApiConfigFile` not `ApiCfg`
+
+3. **Document behavior**: Add docstrings explaining what the config does
+
+### Configuration
+
+1. **Provide sensible defaults**: Users should be able to use the defaults
+2. **Support customization**: Allow users to add their own settings
+3. **Validate input**: Raise clear errors for invalid configuration
+4. **Use environment variables**: For sensitive or environment-specific settings
+
+### Priority
+
+1. **Use HIGH priority** (30) for:
+   - Configs that define core project settings
+   - Configs that other configs read from
+
+2. **Use MEDIUM priority** (20) for:
+   - Configs that need early creation
+   - Configs similar to pyproject.toml
+
+3. **Use DEFAULT priority** (0) for:
+   - Most custom configurations
+   - Configs that depend on others
+
+## Testing Custom Configs
+
+```python
+# tests/test_custom_config.py
+import pytest
+from pathlib import Path
+from myapp.rig.configs.myconfig import MyConfigFile
+
+def test_config_generation():
+    """Test configuration is generated correctly."""
+    config = MyConfigFile.I.configs()
+    assert "app" in config
+    assert config["app"]["name"] == "myapp"
+    assert config["app"]["version"] == "1.0.0"
+
+def test_config_file_location():
+    """Test file is created in correct location."""
+    path = MyConfigFile.I.path()
+    assert path == Path("myconfig.toml")
+
+def test_config_validation():
+    """Test validation creates file if missing."""
+    config_file = MyConfigFile.I
+    # This would create the file if it doesn't exist
+    config_file.validate()
+    assert config_file.path().exists()
+```
+
+## Related
+
+- [Configuration Overview](overview)
+- [pyproject.toml Configuration](pyproject)
+- [GitHub Workflows](github-workflows)
+- [Architecture Documentation](architecture)

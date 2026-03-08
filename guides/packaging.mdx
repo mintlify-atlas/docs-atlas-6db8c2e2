@@ -1,0 +1,677 @@
+---
+title: Packaging with uv_build
+description: Learn how to package and distribute pyrig projects using the uv_build backend
+---
+
+## Overview
+
+pyrig uses the `uv_build` backend for packaging Python projects. This modern build system integrates seamlessly with `uv` and provides:
+
+- **Fast builds**: Rust-based backend for speed
+- **Console script integration**: Automatic CLI entry points
+- **Standard compliance**: PEP 517/518 compatible
+- **Simple configuration**: Minimal `pyproject.toml` setup
+- **uv ecosystem**: Works with the entire uv toolchain
+
+This guide covers packaging your pyrig-based projects and extensions.
+
+## Understanding uv_build
+
+### What is uv_build?
+
+`uv_build` is a PEP 517-compliant build backend that:
+
+1. Builds wheels and source distributions (sdists)
+2. Integrates with `pyproject.toml`
+3. Handles console script generation automatically
+4. Works with uv's dependency management
+
+### How pyrig Uses It
+
+Every pyrig project includes this in `pyproject.toml`:
+
+```toml
+[build-system]
+requires = ["uv_build"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "myproject"
+module-root = ""
+```
+
+This configuration:
+- Declares `uv_build` as the build backend
+- Specifies your project's module name
+- Sets the module root (usually empty string for root-level packages)
+
+## Packaging a Standard Project
+
+### Step 1: Verify pyproject.toml
+
+Ensure your `pyproject.toml` has the required sections:
+
+```toml
+[project]
+name = "my-project"
+version = "1.0.0"
+description = "My awesome project"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+dependencies = [
+    "pyrig>=10.0.0",
+]
+
+[project.scripts]
+my-project = "my_project.rig.cli.cli:main"
+
+[build-system]
+requires = ["uv_build"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "my_project"
+module-root = ""
+```
+
+### Step 2: Build the Package
+
+Use `uv build` to create distributions:
+
+```bash
+# Build wheel and sdist
+uv build
+
+# Output:
+# dist/
+#   my_project-1.0.0-py3-none-any.whl
+#   my_project-1.0.0.tar.gz
+```
+
+The build creates:
+- **Wheel** (`.whl`): Binary distribution for fast installation
+- **Source distribution** (`.tar.gz`): Source code archive
+
+### Step 3: Test the Package
+
+Test locally before publishing:
+
+```bash
+# Install from local wheel
+uv pip install dist/my_project-1.0.0-py3-none-any.whl
+
+# Test the CLI
+my-project --help
+
+# Test the package
+python -c "import my_project; print(my_project.__version__)"
+```
+
+### Step 4: Publish to PyPI
+
+Publish using `uv publish`:
+
+```bash
+# Publish to PyPI (requires token)
+uv publish --token $PYPI_TOKEN
+
+# Publish to Test PyPI
+uv publish --token $TEST_PYPI_TOKEN --registry https://test.pypi.org/legacy/
+```
+
+## Packaging a pyrig Extension
+
+Extension packages (like personal pyrig packages) have special considerations.
+
+### Example: Personal pyrig Package
+
+Create `my-pyrig/pyproject.toml`:
+
+```toml
+[project]
+name = "my-pyrig"
+version = "1.0.0"
+description = "My personal pyrig extensions and standards"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+
+# Declare dependency on pyrig
+dependencies = [
+    "pyrig>=10.0.0",
+]
+
+# Optional: Provide a CLI for your extensions
+[project.scripts]
+my-pyrig = "my_pyrig.rig.cli.cli:main"
+
+[build-system]
+requires = ["uv_build"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "my_pyrig"
+module-root = ""
+
+# Development dependencies
+[dependency-groups]
+dev = [
+    "pytest>=9.0.0",
+    "ruff>=0.15.0",
+]
+```
+
+### Package Structure
+
+Your extension package should include:
+
+```
+my-pyrig/
+├── my_pyrig/
+│   ├── __init__.py              # Package marker
+│   ├── rig/
+│   │   ├── __init__.py
+│   │   ├── tools/               # Tool overrides
+│   │   │   ├── __init__.py
+│   │   │   └── linter.py
+│   │   ├── configs/             # Config overrides
+│   │   │   ├── __init__.py
+│   │   │   └── company_config.py
+│   │   └── cli/
+│   │       ├── __init__.py
+│   │       └── subcommands/     # Custom commands
+│   │           ├── __init__.py
+│   │           └── deploy.py
+│   └── src/                     # Shared utilities
+│       ├── __init__.py
+│       └── utils.py
+├── tests/
+│   └── __init__.py
+├── README.md
+├── LICENSE
+└── pyproject.toml
+```
+
+### Important: \__init\__.py Files
+
+Every directory must have `__init__.py` for proper package discovery:
+
+```bash
+# Create all __init__.py files
+find my_pyrig -type d -exec touch {}/__init__.py \;
+
+# Or use pyrig
+uv run pyrig mkinits
+```
+
+## Console Scripts
+
+Console scripts are CLI entry points automatically created during installation.
+
+### Defining Scripts
+
+In `pyproject.toml`:
+
+```toml
+[project.scripts]
+my-tool = "my_project.rig.cli.cli:main"
+my-util = "my_project.utils:run"
+```
+
+This creates:
+- `my-tool` command → calls `my_project.rig.cli.cli.main()`
+- `my-util` command → calls `my_project.utils.run()`
+
+### Entry Point Function
+
+The entry point must be a callable:
+
+```python
+# my_project/rig/cli/cli.py
+import typer
+
+app = typer.Typer()
+
+@app.command()
+def hello(name: str):
+    """Greet someone."""
+    typer.echo(f"Hello {name}!")
+
+def main():
+    """Entry point for console script."""
+    app()
+
+if __name__ == "__main__":
+    main()
+```
+
+After installation:
+
+```bash
+my-tool hello World
+# Output: Hello World!
+```
+
+### pyrig's CLI Pattern
+
+pyrig projects use a standard CLI structure:
+
+```python
+# my_project/rig/cli/cli.py
+import typer
+from pyrig.rig.cli.subcommands import discover_subcommands
+
+app = typer.Typer(
+    name="my-project",
+    help="My project CLI",
+)
+
+# Discover and register all subcommands automatically
+discover_subcommands(app, "my_project")
+
+def main():
+    """Entry point."""
+    app()
+```
+
+Subcommands are discovered from `my_project/rig/cli/subcommands/`:
+
+```python
+# my_project/rig/cli/subcommands/deploy.py
+import typer
+
+def deploy(env: str) -> None:
+    """Deploy to environment."""
+    typer.echo(f"Deploying to {env}...")
+```
+
+Automatically available:
+
+```bash
+my-project deploy production
+```
+
+## Advanced Configuration
+
+### Module Root Configuration
+
+If your package is not at the repository root:
+
+```toml
+[tool.uv.build-backend]
+module-name = "myproject"
+module-root = "src"  # Package is in src/myproject/
+```
+
+Directory structure:
+
+```
+my-repo/
+├── src/
+│   └── myproject/
+│       ├── __init__.py
+│       └── ...
+└── pyproject.toml
+```
+
+### Include/Exclude Files
+
+Control what's included in the distribution:
+
+```toml
+[tool.uv.build-backend]
+module-name = "myproject"
+module-root = ""
+
+# Exclude patterns
+exclude = [
+    "tests/",
+    "*.pyc",
+    "__pycache__/",
+    ".git/",
+]
+
+# Include additional files
+include = [
+    "LICENSE",
+    "README.md",
+    "my_project/resources/*.json",
+]
+```
+
+### Version Management
+
+pyrig projects can use dynamic versioning:
+
+```toml
+[project]
+name = "my-project"
+version = "1.0.0"  # Or use dynamic versioning
+```
+
+To bump the version:
+
+```bash
+# Bump patch version (1.0.0 → 1.0.1)
+uv version --bump patch
+
+# Bump minor version (1.0.0 → 1.1.0)
+uv version --bump minor
+
+# Bump major version (1.0.0 → 2.0.0)
+uv version --bump major
+```
+
+## Dependency Management
+
+### Specifying Dependencies
+
+```toml
+[project]
+dependencies = [
+    "pyrig>=10.0.0",
+    "requests>=2.28.0",
+    "pydantic>=2.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.0",
+    "ruff>=0.15.0",
+    "mypy>=1.0.0",
+]
+
+test = [
+    "pytest-cov>=4.0.0",
+    "pytest-mock>=3.0.0",
+]
+```
+
+### Dependency Chain
+
+When packaging extensions, dependencies cascade:
+
+```
+pyrig (base)
+  ↓ requires: typer
+my-pyrig (extension)
+  ↓ requires: pyrig, custom-lib
+my-project (uses extension)
+  ↓ requires: my-pyrig, fastapi
+```
+
+Installing `my-project` automatically installs the entire chain!
+
+### Optional Dependencies
+
+```toml
+[project.optional-dependencies]
+docs = [
+    "mkdocs>=1.5.0",
+    "mkdocs-material>=9.0.0",
+]
+
+cloud = [
+    "boto3>=1.26.0",
+    "google-cloud-storage>=2.0.0",
+]
+```
+
+Install with:
+
+```bash
+uv pip install my-project[docs]
+uv pip install my-project[cloud]
+uv pip install my-project[docs,cloud]
+```
+
+## Building for Distribution
+
+### Local Development Build
+
+For testing during development:
+
+```bash
+# Install in editable mode
+uv pip install -e .
+
+# Make changes to code
+vim my_project/rig/tools/custom.py
+
+# Changes are immediately available
+my-project --help  # Uses latest code
+```
+
+### Production Build
+
+For distribution:
+
+```bash
+# Clean previous builds
+rm -rf dist/ build/ *.egg-info
+
+# Build fresh
+uv build
+
+# Verify contents
+tar -tzf dist/my_project-1.0.0.tar.gz | head -20
+unzip -l dist/my_project-1.0.0-py3-none-any.whl | head -20
+```
+
+### Automated Builds
+
+In CI/CD (GitHub Actions):
+
+```yaml
+name: Build and Publish
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+      
+      - name: Build package
+        run: uv build
+      
+      - name: Publish to PyPI
+        env:
+          PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
+        run: uv publish --token $PYPI_TOKEN
+```
+
+## Publishing Strategies
+
+### Test PyPI First
+
+Always test on Test PyPI before production:
+
+```bash
+# Build
+uv build
+
+# Publish to Test PyPI
+uv publish \
+  --token $TEST_PYPI_TOKEN \
+  --registry https://test.pypi.org/legacy/
+
+# Test installation
+uv pip install \
+  --index-url https://test.pypi.org/simple/ \
+  --extra-index-url https://pypi.org/simple/ \
+  my-project
+
+# If everything works, publish to real PyPI
+uv publish --token $PYPI_TOKEN
+```
+
+### Version Strategy
+
+Use semantic versioning:
+
+- **Major** (1.0.0 → 2.0.0): Breaking changes
+- **Minor** (1.0.0 → 1.1.0): New features, backward compatible
+- **Patch** (1.0.0 → 1.0.1): Bug fixes
+
+```bash
+# After bug fix
+uv version --bump patch
+git add pyproject.toml
+git commit -m "Bump version to $(uv version --short)"
+git tag "v$(uv version --short)"
+git push --tags
+```
+
+### Private Package Indexes
+
+For internal packages:
+
+```bash
+# Publish to private index
+uv publish \
+  --token $PRIVATE_TOKEN \
+  --registry https://pypi.internal.company.com/
+
+# Install from private index
+uv pip install \
+  --index-url https://pypi.internal.company.com/simple/ \
+  my-private-package
+```
+
+Configure in `pyproject.toml`:
+
+```toml
+[tool.uv]
+index-url = "https://pypi.internal.company.com/simple/"
+extra-index-url = ["https://pypi.org/simple/"]
+```
+
+## Overriding Build Backend
+
+You can override the build backend in your extensions:
+
+### Using Poetry
+
+```python
+# my_pyrig/rig/tools/package_manager.py
+from pyrig.rig.tools.package_manager import PackageManager as PyrigPM
+
+class PackageManager(PyrigPM):
+    """Override to use Poetry instead of uv."""
+    
+    def build_system_requires(self) -> list[str]:
+        """Use Poetry for builds."""
+        return ["poetry-core"]
+    
+    def build_backend(self) -> str:
+        """Poetry build backend."""
+        return "poetry.core.masonry.api"
+```
+
+Now all projects using your extension will use Poetry!
+
+### Using Setuptools
+
+```python
+class PackageManager(PyrigPM):
+    def build_system_requires(self) -> list[str]:
+        return ["setuptools>=68.0", "wheel"]
+    
+    def build_backend(self) -> str:
+        return "setuptools.build_meta"
+```
+
+### Using Hatch
+
+```python
+class PackageManager(PyrigPM):
+    def build_system_requires(self) -> list[str]:
+        return ["hatchling"]
+    
+    def build_backend(self) -> str:
+        return "hatchling.build"
+```
+
+## Common Issues and Solutions
+
+### Issue: Module Not Found
+
+```
+ModuleNotFoundError: No module named 'my_project'
+```
+
+**Solution**: Ensure `module-name` matches your package directory:
+
+```toml
+[tool.uv.build-backend]
+module-name = "my_project"  # Must match my_project/ directory
+```
+
+### Issue: Console Script Not Working
+
+```bash
+my-tool: command not found
+```
+
+**Solution**: Check entry point syntax:
+
+```toml
+[project.scripts]
+my-tool = "my_project.cli:main"  # module.submodule:function
+```
+
+Verify the function exists:
+
+```python
+# my_project/cli.py
+def main():
+    print("Hello!")
+```
+
+### Issue: Missing Files in Distribution
+
+**Solution**: Include them explicitly:
+
+```toml
+[tool.uv.build-backend]
+include = [
+    "my_project/data/*.json",
+    "my_project/templates/*.html",
+]
+```
+
+### Issue: Import Errors After Install
+
+**Solution**: Ensure all directories have `__init__.py`:
+
+```bash
+uv run pyrig mkinits
+```
+
+## Next Steps
+
+- [Extending pyrig](/guides/extending-pyrig) - Create your extension package
+- [Creating Custom Tools](/guides/creating-custom-tools) - Add custom tools
+- [Publishing Guide](https://winipedia.github.io/pyrig/more/publishing/) - Detailed publishing workflow
+- [uv Documentation](https://github.com/astral-sh/uv) - Learn more about uv
+
+## Best Practices
+
+1. **Version carefully**: Use semantic versioning
+2. **Test locally**: Install from wheel before publishing
+3. **Use Test PyPI**: Verify everything works before production
+4. **Include LICENSE**: Always include license file
+5. **Write good README**: Help users get started
+6. **Document dependencies**: Explain what your package needs
+7. **Tag releases**: Use git tags for version tracking
+8. **Automate**: Use CI/CD for consistent builds
+9. **Keep it simple**: Minimal configuration is best
+10. **Follow conventions**: Study pyrig's own `pyproject.toml`

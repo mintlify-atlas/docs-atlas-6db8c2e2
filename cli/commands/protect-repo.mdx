@@ -1,0 +1,365 @@
+---
+title: pyrig protect-repo
+description: Configure GitHub repository protection rules and security settings
+---
+
+## Overview
+
+The `protect-repo` command applies comprehensive security protections to a GitHub repository, including repository-level settings and branch protection rulesets. It enforces pyrig's opinionated security defaults to maintain code quality and prevent accidental destructive operations.
+
+```bash
+uv run pyrig protect-repo
+```
+
+<Warning>
+  Requires a `REPO_TOKEN` environment variable with `repo` scope permissions. The command will fail if the token is not found.
+</Warning>
+
+## What It Does
+
+The command configures two levels of protection:
+
+### Repository Settings
+
+- Sets repository description from `pyproject.toml`
+- Sets default branch to `main`
+- Enables "delete branch on merge"
+- Disables merge commits (enforces squash and rebase only)
+
+### Branch Protection Rules
+
+- Requires pull request reviews with code owner approval
+- Requires status checks to pass (health check workflow)
+- Requires linear commit history
+- Requires signed commits
+- Disables force pushes
+- Disables branch deletions
+
+<Note>
+  The command is **idempotent**: safe to run multiple times, updates existing rulesets instead of creating duplicates.
+</Note>
+
+## Usage
+
+### Basic Usage
+
+```bash
+# Set REPO_TOKEN environment variable first
+export REPO_TOKEN=ghp_your_token_here
+
+# Apply protections
+uv run pyrig protect-repo
+```
+
+### Using .env File
+
+```bash
+# Create .env file
+echo "REPO_TOKEN=ghp_your_token_here" > .env
+
+# Run command (automatically loads from .env)
+uv run pyrig protect-repo
+```
+
+### With Verbose Output
+
+```bash
+# See detailed protection application
+uv run pyrig -v protect-repo
+
+# See API calls and responses
+uv run pyrig -vv protect-repo
+```
+
+### Quiet Mode
+
+```bash
+# Only show warnings and errors
+uv run pyrig -q protect-repo
+```
+
+## Expected Output
+
+```bash
+$ uv run pyrig protect-repo
+Configuring repository settings...
+✓ Updated repository description
+✓ Set default branch to 'main'
+✓ Enabled delete branch on merge
+✓ Disabled merge commits
+
+Applying branch protection rules...
+✓ Created/updated branch protection ruleset
+✓ Repository protection configured successfully
+```
+
+```bash
+$ uv run pyrig -v protect-repo
+DEBUG: Loading REPO_TOKEN from environment
+INFO: Configuring repository settings
+DEBUG: Setting description from pyproject.toml
+DEBUG: Setting default branch to 'main'
+INFO: Applying branch protection rules
+DEBUG: Loading rules from branch-protection.json
+DEBUG: Creating ruleset via GitHub API
+✓ Repository protection configured successfully
+```
+
+## Prerequisites
+
+### GitHub Personal Access Token
+
+Create a token with `repo` scope:
+
+<Steps>
+  <Step title="Go to GitHub Settings">
+    Navigate to Settings → Developer settings → Personal access tokens → Tokens (classic)
+  </Step>
+  
+  <Step title="Generate new token">
+    Click "Generate new token (classic)"
+  </Step>
+  
+  <Step title="Select scopes">
+    Check the `repo` scope (full control of private repositories)
+  </Step>
+  
+  <Step title="Generate and copy">
+    Click "Generate token" and copy the token (starts with `ghp_`)
+  </Step>
+  
+  <Step title="Set environment variable">
+    ```bash
+    export REPO_TOKEN=ghp_your_token_here
+    # Or add to .env file
+    echo "REPO_TOKEN=ghp_your_token_here" >> .env
+    ```
+  </Step>
+</Steps>
+
+<Warning>
+  Keep your token secure! Never commit it to version control. The `.env` file should be in `.gitignore`.
+</Warning>
+
+## Protection Rules
+
+Rules are loaded from `branch-protection.json` in your project root:
+
+```json
+{
+  "name": "Branch Protection",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": {
+    "ref_name": {
+      "include": ["refs/heads/main"],
+      "exclude": []
+    }
+  },
+  "rules": [
+    {
+      "type": "pull_request",
+      "parameters": {
+        "require_code_owner_review": true,
+        "required_approving_review_count": 1
+      }
+    },
+    {
+      "type": "required_status_checks",
+      "parameters": {
+        "required_status_checks": [
+          {"context": "health-check"}
+        ]
+      }
+    },
+    {
+      "type": "required_linear_history"
+    },
+    {
+      "type": "required_signatures"
+    },
+    {
+      "type": "non_fast_forward"
+    },
+    {
+      "type": "deletion"
+    }
+  ]
+}
+```
+
+## Customizing Protection Rules
+
+To customize the protection rules:
+
+<Steps>
+  <Step title="Generate default config">
+    ```bash
+    uv run pyrig mkroot  # Creates branch-protection.json
+    ```
+  </Step>
+  
+  <Step title="Edit branch-protection.json">
+    Modify the rules according to your needs:
+    ```json
+    {
+      "rules": [
+        {
+          "type": "pull_request",
+          "parameters": {
+            "required_approving_review_count": 2  # Require 2 approvals
+          }
+        }
+      ]
+    }
+    ```
+  </Step>
+  
+  <Step title="Apply updated rules">
+    ```bash
+    uv run pyrig protect-repo
+    ```
+  </Step>
+</Steps>
+
+## Behavior
+
+<ParamField path="Token Lookup" type="environment">
+  Checks `REPO_TOKEN` in environment variables first, then falls back to `.env` file.
+</ParamField>
+
+<ParamField path="Repository Detection" type="automatic">
+  Automatically detects the GitHub repository from Git remote configuration.
+</ParamField>
+
+<ParamField path="Idempotency" type="guaranteed">
+  Updates existing rulesets instead of creating duplicates. Safe to run multiple times.
+</ParamField>
+
+<ParamField path="Ruleset Loading" type="json-file">
+  Loads protection rules from `branch-protection.json` in the project root.
+</ParamField>
+
+## Applied Settings
+
+### Repository-Level
+
+| Setting | Value | Purpose |
+|---------|-------|----------|
+| Description | From `pyproject.toml` | Keeps repo description in sync |
+| Default branch | `main` | Standard default branch |
+| Delete branch on merge | Enabled | Keeps repository clean |
+| Merge commits | Disabled | Enforces linear history |
+
+### Branch Protection
+
+| Rule | Configuration | Purpose |
+|------|---------------|----------|
+| Pull requests | Required with code owner approval | Ensures code review |
+| Status checks | Health check must pass | Ensures CI passes |
+| Linear history | Required | Prevents merge commits |
+| Signed commits | Required | Ensures commit authenticity |
+| Force pushes | Disabled | Prevents history rewriting |
+| Branch deletion | Disabled | Protects main branch |
+
+## When to Use
+
+### Use `protect-repo` When:
+
+- Setting up a new repository
+- Enforcing security standards across an organization
+- Updating protection rules after policy changes
+- Ensuring compliance with security requirements
+- Migrating from manual protection settings
+
+### Example Workflow
+
+<Steps>
+  <Step title="Initialize project">
+    ```bash
+    uv run pyrig init
+    ```
+  </Step>
+  
+  <Step title="Create GitHub repository">
+    ```bash
+    gh repo create --private --source=.
+    ```
+  </Step>
+  
+  <Step title="Set token">
+    ```bash
+    export REPO_TOKEN=ghp_your_token_here
+    ```
+  </Step>
+  
+  <Step title="Apply protection">
+    ```bash
+    uv run pyrig protect-repo
+    ```
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+### Missing Token Error
+
+```bash
+ERROR: REPO_TOKEN not found in environment or .env file
+```
+
+**Solution**: Set the `REPO_TOKEN` environment variable:
+```bash
+export REPO_TOKEN=ghp_your_token_here
+```
+
+### Insufficient Permissions
+
+```bash
+ERROR: GitHub API returned 403 Forbidden
+```
+
+**Solution**: Ensure your token has `repo` scope permissions.
+
+### Repository Not Found
+
+```bash
+ERROR: Could not determine GitHub repository
+```
+
+**Solution**: Ensure you're in a Git repository with a GitHub remote:
+```bash
+git remote -v
+```
+
+<Warning>
+  This command makes **destructive changes** to repository settings. Review the protection rules before applying them to production repositories.
+</Warning>
+
+## Security Considerations
+
+- **Token Security**: Store `REPO_TOKEN` securely, never commit to version control
+- **Scope Limitation**: Use tokens with minimal required scopes
+- **Token Rotation**: Rotate tokens regularly
+- **Audit Logs**: Review GitHub audit logs for protection changes
+- **Team Access**: Ensure team members understand the protection rules
+
+## Related Commands
+
+- **[init](/cli/commands/init)** - Full project initialization
+- **[mkroot](/cli/commands/mkroot)** - Generate `branch-protection.json`
+
+## Implementation
+
+The `protect-repo` command calls `RepoProtectionConfigFile.I.protect_repo()`, which:
+
+1. Loads `REPO_TOKEN` from environment or `.env`
+2. Reads `branch-protection.json`
+3. Applies repository settings via GitHub API
+4. Creates/updates branch protection rulesets
+
+See `pyrig/rig/cli/commands/protect_repo.py:10`.
+
+<Note>
+  Run `uv run pyrig protect-repo --help` to see the command's built-in help text.
+</Note>

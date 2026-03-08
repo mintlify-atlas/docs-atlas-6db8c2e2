@@ -1,80 +1,360 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick Start
+description: Get up and running with pyrig in under 2 minutes
 ---
 
-## Get started in three steps
+## Installation
 
-Get your documentation site running locally and make your first customization.
+pyrig works with any Python 3.12+ project. Follow these steps to add pyrig to a new or existing project.
 
-### Step 1: Set up your local environment
+<Steps>
+  <Step title="Create or navigate to your project">
+    Start with an empty directory or navigate to an existing Python project:
+
+    ```bash
+    mkdir my-project
+    cd my-project
+    ```
+  </Step>
+
+  <Step title="Initialize with uv (recommended)">
+    <Tabs>
+      <Tab title="New Project">
+        ```bash
+        uv init
+        ```
+
+        This creates a basic Python project structure with a `pyproject.toml` file.
+      </Tab>
+      <Tab title="Existing Project">
+        If you already have a `pyproject.toml`, skip this step.
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step title="Add pyrig as a dependency">
+    <Tabs>
+      <Tab title="Using uv">
+        ```bash
+        uv add pyrig
+        ```
+      </Tab>
+      <Tab title="Using pip">
+        ```bash
+        pip install pyrig
+        ```
+
+        Then add to `pyproject.toml`:
+        ```toml
+        [project]
+        dependencies = [
+            "pyrig>=10.2.3",
+        ]
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step title="Initialize your pyrig project">
+    Run the initialization command:
+
+    ```bash
+    uv run pyrig init
+    ```
+
+    <Accordion title="What does pyrig init do?">
+      The `init` command runs a comprehensive setup sequence:
+
+      1. Initializes git repository (`git init`)
+      2. Adds development dependencies (pytest, ruff, etc.)
+      3. Syncs the virtual environment
+      4. Creates all config files and project structure
+      5. Generates test skeletons
+      6. Installs pre-commit hooks
+      7. Formats and lints all files
+      8. Runs the test suite
+      9. Creates initial git commit
+
+      **Duration**: Typically 30-60 seconds depending on your machine.
+    </Accordion>
+
+    <Info>
+      The `init` command is idempotent. You can run it again anytime to sync your project structure.
+    </Info>
+  </Step>
+</Steps>
+
+## Verify Installation
+
+After installation completes, verify everything works:
+
+<CodeGroup>
+```bash Check pyrig version
+uv run pyrig version
+# Output: pyrig version 10.2.3
+```
+
+```bash Check your project CLI
+uv run my-project --help
+# Shows available commands for your project
+```
+
+```bash Run tests
+uv run pytest
+# Runs your test suite
+```
+</CodeGroup>
+
+## Your First pyrig Command
+
+Let's explore what pyrig created by running a few commands:
+
+### View Generated Structure
+
+```bash
+tree -L 3 -I '__pycache__|*.pyc'
+```
+
+You should see:
+
+```plaintext
+my-project/
+├── my_project/
+│   ├── __init__.py
+│   ├── main.py
+│   ├── rig/
+│   │   ├── builders/
+│   │   ├── cli/
+│   │   ├── configs/
+│   │   ├── tools/
+│   │   └── tests/
+│   └── src/
+├── tests/
+│   ├── conftest.py
+│   └── fixtures/
+├── .github/
+│   └── workflows/
+├── pyproject.toml
+├── .gitignore
+└── README.md
+```
+
+### Try the Automatic CLI
+
+Your project now has a working CLI. Try these commands:
+
+<CodeGroup>
+```bash Show help
+uv run my-project --help
+```
+
+```bash Show version
+uv run my-project version
+```
+
+```bash Update configs
+uv run pyrig mkroot
+```
+
+```bash Generate test skeletons
+uv run pyrig mktests
+```
+</CodeGroup>
+
+## Common Commands
+
+Here are the most frequently used pyrig commands:
 
 <AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
+  <Accordion title="pyrig init" icon="rocket">
+    **Full project initialization**
+
+    ```bash
+    uv run pyrig init
+    ```
+
+    Transforms a basic Python project into a fully-configured, production-ready pyrig project. Safe to run on existing projects — it's idempotent.
   </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
+
+  <Accordion title="pyrig mkroot" icon="folder-tree">
+    **Create or update all config files**
+
+    ```bash
+    uv run pyrig mkroot
+    ```
+
+    Discovers all `ConfigFile` subclasses and validates them. Creates missing files, adds missing keys, but preserves your customizations.
+  </Accordion>
+
+  <Accordion title="pyrig mktests" icon="flask">
+    **Generate test skeletons**
+
+    ```bash
+    uv run pyrig mktests
+    ```
+
+    Creates test files mirroring your source structure. Non-destructive — only adds new test skeletons.
+  </Accordion>
+
+  <Accordion title="pyrig mkinits" icon="file">
+    **Create missing __init__.py files**
+
+    ```bash
+    uv run pyrig mkinits
+    ```
+
+    Scans for namespace packages and creates minimal `__init__.py` files.
+  </Accordion>
+
+  <Accordion title="pyrig build" icon="hammer">
+    **Build artifacts**
+
+    ```bash
+    uv run pyrig build
+    ```
+
+    Runs all registered builders (PyInstaller executables, etc.).
   </Accordion>
 </AccordionGroup>
 
-### Step 2: Deploy your changes
+## Working Example
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+Let's create a simple CLI tool to see pyrig in action.
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+<Steps>
+  <Step title="Create a command function">
+    Edit `my_project/rig/cli/subcommands.py` and add:
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+    ```python my_project/rig/cli/subcommands.py
+    def greet(name: str = "World") -> None:
+        """Greet someone by name."""
+        print(f"Hello, {name}!")
+    ```
+  </Step>
 
-### Step 3: Go live
+  <Step title="Run your command">
+    ```bash
+    uv run my-project greet --name Alice
+    # Output: Hello, Alice!
+    ```
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+    <Success>
+      Your command was automatically discovered and registered. No imports or decorators needed!
+    </Success>
+  </Step>
 
-## Next steps
+  <Step title="Add a shared command">
+    Shared commands work across all dependent projects. Edit `my_project/rig/cli/shared_subcommands.py`:
 
-Now that you have your docs running, explore these key features:
+    ```python my_project/rig/cli/shared_subcommands.py
+    import typer
+
+    def info() -> None:
+        """Display project information."""
+        typer.echo("My amazing pyrig project")
+    ```
+
+    Now any project that depends on `my-project` will have the `info` command available.
+  </Step>
+</Steps>
+
+## Next Steps
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Understand the Architecture" icon="diagram-project" href="/architecture">
+    Learn how pyrig's config system, CLI discovery, and multi-package inheritance work
+  </Card>
+  <Card title="Explore the CLI" icon="terminal">
+    Deep dive into CLI commands and automatic command discovery
+  </Card>
+  <Card title="Config System" icon="file-code">
+    Create custom config files and override existing ones
+  </Card>
+  <Card title="Testing" icon="flask">
+    Learn about autouse fixtures and test infrastructure
+  </Card>
 </CardGroup>
 
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>
+## Verbosity Control
+
+All pyrig commands support flexible logging:
+
+<CodeGroup>
+```bash Default (INFO level)
+uv run pyrig mkroot
+```
+
+```bash Quiet (warnings and errors only)
+uv run pyrig -q mkroot
+```
+
+```bash Verbose (debug output)
+uv run pyrig -v mkroot
+```
+
+```bash Very verbose (with module names)
+uv run pyrig -vv mkroot
+```
+
+```bash Maximum verbosity (with timestamps)
+uv run pyrig -vvv mkroot
+```
+</CodeGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Command not found: pyrig">
+    Make sure you're running commands with `uv run`:
+
+    ```bash
+    uv run pyrig --help
+    ```
+
+    Or activate your virtual environment:
+
+    ```bash
+    source .venv/bin/activate  # Unix
+    .venv\Scripts\activate     # Windows
+    pyrig --help
+    ```
+  </Accordion>
+
+  <Accordion title="Import errors during init">
+    Some pyrig commands require dev dependencies. Make sure they're installed:
+
+    ```bash
+    uv sync --all-groups
+    ```
+  </Accordion>
+
+  <Accordion title="Permission errors with git hooks">
+    If pre-commit hooks fail to install:
+
+    ```bash
+    chmod +x .git/hooks/pre-commit
+    ```
+  </Accordion>
+
+  <Accordion title="Python version mismatch">
+    pyrig requires Python 3.12+. Check your version:
+
+    ```bash
+    python --version
+    ```
+
+    If needed, specify the Python version for uv:
+
+    ```bash
+    uv venv --python 3.12
+    ```
+  </Accordion>
+</AccordionGroup>
+
+<Warning>
+  The `pyrig init` command will create a git commit. Make sure any important uncommitted changes are stashed first.
+</Warning>
+
+## What's Next?
+
+Now that you have pyrig running, dive deeper into the architecture to understand how the system works and how to extend it for your needs.

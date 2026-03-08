@@ -1,0 +1,350 @@
+---
+title: pyrig rmpyc
+description: Remove all __pycache__ directories and their contents from the project
+---
+
+## Overview
+
+The `rmpyc` command recursively searches the project directory for any `__pycache__` directories and deletes them along with their contents. This is useful for cleaning up compiled Python files that may be causing issues or taking up unnecessary space.
+
+```bash
+uv run pyrig rmpyc
+```
+
+## What It Does
+
+The command:
+
+1. **Scans** the project's package and tests directories for `__pycache__` directories
+2. **Recursively searches** all subdirectories
+3. **Deletes** each `__pycache__` directory and all `.pyc` files within
+4. **Reports** each deletion to stdout
+
+<Warning>
+  This will **permanently delete** all `__pycache__` directories and their contents. However, it's safe to run as Python will regenerate these files when needed.
+</Warning>
+
+## Usage
+
+### Basic Usage
+
+```bash
+uv run pyrig rmpyc
+```
+
+### With Verbose Output
+
+```bash
+# See detailed deletion information
+uv run pyrig -v rmpyc
+```
+
+### Quiet Mode
+
+```bash
+# Only show warnings and errors
+uv run pyrig -q rmpyc
+```
+
+## Expected Output
+
+```bash
+$ uv run pyrig rmpyc
+Removing myproject/__pycache__
+Removing myproject/utils/__pycache__
+Removing myproject/models/__pycache__
+Removing tests/__pycache__
+Removing tests/models/__pycache__
+✓ Removed 5 __pycache__ directories
+```
+
+```bash
+# When no __pycache__ directories exist
+$ uv run pyrig rmpyc
+✓ No __pycache__ directories found
+```
+
+## What Gets Deleted
+
+The command targets:
+
+- All `__pycache__/` directories
+- All `.pyc` files (compiled bytecode)
+- All `.pyo` files (optimized bytecode)
+
+### Directory Structure Before
+
+```
+myproject/
+├── __pycache__/
+│   ├── __init__.cpython-311.pyc
+│   └── main.cpython-311.pyc
+├── utils/
+│   └── __pycache__/
+│       └── helpers.cpython-311.pyc
+└── models/
+    └── __pycache__/
+        └── user.cpython-311.pyc
+
+tests/
+└── __pycache__/
+    └── test_main.cpython-311.pyc
+```
+
+### Directory Structure After
+
+```
+myproject/
+├── utils/
+└── models/
+
+tests/
+```
+
+All `__pycache__/` directories are gone.
+
+## Behavior
+
+<ParamField path="Scope" type="package-and-tests">
+  Scans both the main package (from `pyproject.toml`) and the tests package.
+</ParamField>
+
+<ParamField path="Recursion" type="full">
+  Recursively searches all subdirectories using `Path.rglob("__pycache__")`.
+</ParamField>
+
+<ParamField path="Deletion" type="immediate">
+  Deletes directories immediately using `shutil.rmtree()`. No confirmation prompt.
+</ParamField>
+
+<ParamField path="Idempotency" type="guaranteed">
+  Safe to run multiple times. Subsequent runs find no directories to delete.
+</ParamField>
+
+<ParamField path="Output" type="verbose">
+  Prints each deletion to stdout using `typer.echo()`.
+</ParamField>
+
+## When to Use
+
+### Use `rmpyc` When:
+
+- **Import errors** - Stale `.pyc` files causing module import issues
+- **Debugging** - Ensuring you're running the latest source code
+- **Disk space** - Cleaning up unnecessary compiled files
+- **Before deployment** - Cleaning the project before packaging
+- **After refactoring** - Removing cached files from renamed/deleted modules
+- **Version control** - Cleaning up before committing (though `.pyc` should be git-ignored)
+
+### Common Scenarios
+
+#### Stale Bytecode Issues
+
+```bash
+# Problem: ImportError despite correct source code
+$ python -m myproject
+ImportError: cannot import name 'OldClass' from 'myproject.models'
+
+# Solution: Clear bytecode cache
+$ uv run pyrig rmpyc
+Removing myproject/models/__pycache__
+
+$ python -m myproject
+# Works now!
+```
+
+#### After Major Refactoring
+
+```bash
+# After renaming/moving modules
+mv src/myproject/old_module.py src/myproject/new_module.py
+
+# Clear stale bytecode
+uv run pyrig rmpyc
+
+# Verify imports
+python -c "from myproject.new_module import MyClass"
+```
+
+#### Disk Space Cleanup
+
+```bash
+# Check size before
+du -sh myproject/
+# 45M    myproject/
+
+# Clean cache
+uv run pyrig rmpyc
+
+# Check size after
+du -sh myproject/
+# 23M    myproject/  (saved 22M)
+```
+
+## What About .pyc Files?
+
+Python automatically creates `.pyc` files when:
+
+1. A module is imported
+2. Python compiles the source code to bytecode
+3. The bytecode is cached for faster subsequent imports
+
+### When .pyc Files Cause Problems
+
+- **Renamed files**: Old `.pyc` files can cause import errors
+- **Moved modules**: Cached paths become stale
+- **Modified code**: Sometimes Python doesn't detect changes (rare)
+- **Python version changes**: `.pyc` files from different Python versions
+
+<Note>
+  Python usually handles `.pyc` invalidation automatically. You only need `rmpyc` when something goes wrong or for cleanup.
+</Note>
+
+## Alternative Approaches
+
+| Approach | Command | Scope |
+|----------|---------|-------|
+| **pyrig** | `uv run pyrig rmpyc` | Project package + tests |
+| **find** | `find . -type d -name __pycache__ -exec rm -rf {} +` | Entire directory tree |
+| **Python** | `python -Bc "import compileall"` | Disable `.pyc` creation |
+| **git clean** | `git clean -fdX` | All git-ignored files |
+
+## Integration with Other Commands
+
+### Before Running Tests
+
+```bash
+# Ensure clean bytecode before tests
+uv run pyrig rmpyc
+uv run pytest
+```
+
+### After Code Changes
+
+```bash
+# Make changes
+vim src/myproject/module.py
+
+# Clear cache to ensure fresh import
+uv run pyrig rmpyc
+
+# Test changes
+python -m myproject
+```
+
+### Before Building
+
+```bash
+# Clean before build
+uv run pyrig rmpyc
+
+# Build artifacts
+uv run pyrig build
+```
+
+## Performance
+
+The command is fast even on large projects:
+
+- Uses `Path.rglob()` for efficient filesystem traversal
+- Deletes directories in a single pass
+- Minimal overhead from pyrig CLI
+
+```bash
+# Large project with 1000+ modules
+$ time uv run pyrig rmpyc
+Removed 347 __pycache__ directories
+
+real    0m1.234s
+```
+
+## Safety
+
+<ParamField path="Reversible" type="yes">
+  Python regenerates `__pycache__` directories automatically when modules are imported.
+</ParamField>
+
+<ParamField path="Data Loss" type="none">
+  Only deletes compiled bytecode, never source code or data files.
+</ParamField>
+
+<ParamField path="Confirmation" type="none">
+  No confirmation prompt - deletion is immediate. Use with awareness.
+</ParamField>
+
+<Note>
+  While safe in practice, **always ensure you're in the correct directory** before running bulk deletion commands.
+</Note>
+
+## Troubleshooting
+
+### Permission Errors
+
+```bash
+PermissionError: [Errno 13] Permission denied: 'myproject/__pycache__'
+```
+
+**Solution**: Run with appropriate permissions or check file ownership.
+
+### Still Seeing Import Issues
+
+If `rmpyc` doesn't fix import problems:
+
+1. **Check Python version**: Ensure you're using the correct Python version
+2. **Verify environment**: Make sure virtual environment is activated
+3. **Check sys.path**: Verify import paths are correct
+4. **Reinstall package**: Try `uv sync` to reinstall dependencies
+
+```bash
+# Full cleanup and reinstall
+uv run pyrig rmpyc
+rm -rf .venv
+uv sync
+```
+
+## Git Integration
+
+Python cache files should be git-ignored:
+
+```gitignore
+# .gitignore
+__pycache__/
+*.py[cod]
+*$py.class
+```
+
+If you accidentally committed `__pycache__`:
+
+```bash
+# Remove from git but keep local
+git rm -r --cached **/__pycache__
+
+# Remove completely
+uv run pyrig rmpyc
+
+# Commit removal
+git add .gitignore
+git commit -m "Remove __pycache__ from version control"
+```
+
+## Related Commands
+
+- **[init](/cli/commands/init)** - Generates `.gitignore` that excludes `__pycache__`
+- **[mkroot](/cli/commands/mkroot)** - Updates `.gitignore` configuration
+- **[build](/cli/commands/build)** - Building (often done after cleanup)
+
+## Implementation
+
+The `rmpyc` command:
+
+1. Gets package names from `PackageManager.I.package_name()` and `ProjectTester.I.tests_package_name()`
+2. Converts package names to `Path` objects
+3. Uses `Path.rglob("__pycache__")` to find all cache directories
+4. Deletes each with `shutil.rmtree()`
+5. Prints each deletion with `typer.echo()`
+
+See `pyrig/rig/cli/commands/remove_pycache.py:16`.
+
+<Note>
+  Run `uv run pyrig rmpyc --help` to see the command's built-in help text.
+</Note>

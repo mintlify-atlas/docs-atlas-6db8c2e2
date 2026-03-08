@@ -1,0 +1,379 @@
+---
+title: PyInstaller Integration
+description: Create standalone executables with PyInstallerBuilder
+---
+
+## Overview
+
+The `PyInstallerBuilder` class provides a high-level interface for creating standalone executables using PyInstaller. It handles resource bundling, icon conversion, and PyInstaller configuration automatically.
+
+## Features
+
+- **Single-file executables** using `--onefile`
+- **No console window** with `--noconsole` 
+- **Automatic resource bundling** from multiple packages
+- **Platform-specific icon conversion** (PNG → ICO/ICNS/PNG)
+- **Multi-package resource discovery** from entire dependency chain
+- **Clean builds** with `--clean`
+
+## Quick Start
+
+### 1. Create a Builder Class
+
+Create a file in `pyrig/rig/builders/app_builder.py`:
+
+```python
+from types import ModuleType
+from pyrig.rig.builders.pyinstaller import PyInstallerBuilder
+from myapp import resources
+
+class AppBuilder(PyInstallerBuilder):
+    
+    def additional_resource_packages(self) -> list[ModuleType]:
+        """Specify which resource packages to bundle."""
+        return [resources]
+```
+
+### 2. Add an Icon
+
+Place an `icon.png` file in your resources directory:
+
+```
+myapp/
+  resources/
+    icon.png      # 256x256 PNG recommended
+    __init__.py
+```
+
+### 3. Build
+
+Run the build command:
+
+```bash
+uv run pyrig build
+```
+
+This creates `dist/myapp-Linux` (or `-Windows.exe` / `-Darwin` depending on platform).
+
+## Resource Bundling
+
+### Automatic Discovery
+
+PyInstallerBuilder automatically discovers and bundles resources from:
+
+1. **Default resources** - All `resources` modules from packages depending on pyrig
+2. **Additional resources** - Packages specified in `additional_resource_packages()`
+
+### How It Works
+
+```python
+class AppBuilder(PyInstallerBuilder):
+    
+    def additional_resource_packages(self) -> list[ModuleType]:
+        # Your app's resources
+        from myapp import resources
+        
+        # Resources from a dependency
+        from mylib import assets
+        
+        return [resources, assets]
+```
+
+All files in these packages will be bundled using PyInstaller's `--add-data` option and accessible at runtime via `importlib.resources` or `pyrig.src.resource`.
+
+### Accessing Bundled Resources
+
+At runtime, access resources using standard Python APIs:
+
+```python
+import importlib.resources as resources
+from myapp import resources as res_package
+
+# Read a text file
+text = resources.read_text(res_package, "config.json")
+
+# Get a file path
+with resources.path(res_package, "data.db") as db_path:
+    # Use db_path
+    pass
+```
+
+## Icon Conversion
+
+### Platform-Specific Icons
+
+The builder automatically converts your PNG icon to the appropriate format:
+
+- **Windows**: PNG → ICO
+- **macOS**: PNG → ICNS  
+- **Linux**: PNG (no conversion)
+
+### Icon Requirements
+
+- **Format**: PNG
+- **Location**: `{package}/resources/icon.png`
+- **Size**: 256x256 recommended (for best compatibility)
+- **For ICNS**: Multiple sizes (16, 32, 128, 256, 512) provide better results
+
+### Custom Icon Location
+
+Override `app_icon_png_path()` to use a custom location:
+
+```python
+from pathlib import Path
+
+class AppBuilder(PyInstallerBuilder):
+    
+    def additional_resource_packages(self) -> list[ModuleType]:
+        return []
+    
+    def app_icon_png_path(self) -> Path:
+        return self.root_path() / "assets" / "my_icon.png"
+```
+
+## PyInstaller Configuration
+
+### Default Options
+
+The builder uses these PyInstaller options by default:
+
+- `--onefile` - Create a single executable file
+- `--noconsole` - No console window (GUI app)
+- `--clean` - Clean PyInstaller cache before building
+- `--noconfirm` - Replace output directory without confirmation
+- `--name <app_name>` - Executable name from `pyproject.toml`
+- `--icon <icon>` - Platform-specific icon
+- `--add-data <resources>` - All discovered resource files
+
+### Customizing Options
+
+Override `pyinstaller_options()` for full control:
+
+```python
+class AppBuilder(PyInstallerBuilder):
+    
+    def additional_resource_packages(self) -> list[ModuleType]:
+        return []
+    
+    def pyinstaller_options(self, temp_artifacts_dir: Path) -> tuple[str, ...]:
+        # Get default options
+        options = super().pyinstaller_options(temp_artifacts_dir)
+        
+        # Add custom options
+        custom_options = (
+            "--debug", "all",
+            "--log-level", "DEBUG",
+        )
+        
+        return options + custom_options
+```
+
+## Advanced Usage
+
+### Multi-Package Applications
+
+For applications built from multiple packages:
+
+```python
+class AppBuilder(PyInstallerBuilder):
+    
+    def additional_resource_packages(self) -> list[ModuleType]:
+        from myapp import resources
+        from myapp_plugin import assets
+        from shared_lib import resources as shared_resources
+        
+        return [
+            resources,
+            assets,
+            shared_resources,
+        ]
+```
+
+All resources from all packages will be bundled and accessible at runtime.
+
+### Custom Data Files
+
+Add additional data files using `add_datas()`:
+
+```python
+class AppBuilder(PyInstallerBuilder):
+    
+    def additional_resource_packages(self) -> list[ModuleType]:
+        return []
+    
+    def add_datas(self) -> list[tuple[str, str]]:
+        # Get default data files
+        datas = super().add_datas()
+        
+        # Add custom data files
+        custom_datas = [
+            (str(self.root_path() / "config.ini"), "."),
+            (str(self.root_path() / "data" / "database.db"), "data"),
+        ]
+        
+        return datas + custom_datas
+```
+
+### Build Directory Customization
+
+The builder creates several temporary directories during the build:
+
+- **workpath** - PyInstaller intermediate files
+- **specpath** - Generated `.spec` file
+- **distpath** - Final executable output (moved to `dist/`)
+
+Override these methods to customize locations:
+
+```python
+class AppBuilder(PyInstallerBuilder):
+    
+    def additional_resource_packages(self) -> list[ModuleType]:
+        return []
+    
+    def temp_workpath(self, temp_dir: Path) -> Path:
+        path = temp_dir / "work"
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+    
+    def temp_specpath(self, temp_dir: Path) -> Path:
+        path = temp_dir / "spec"
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+```
+
+## Complete Example
+
+Here's a complete example with all features:
+
+```python
+from pathlib import Path
+from types import ModuleType
+from pyrig.rig.builders.pyinstaller import PyInstallerBuilder
+
+class MyAppBuilder(PyInstallerBuilder):
+    """Builder for MyApp standalone executable."""
+    
+    def additional_resource_packages(self) -> list[ModuleType]:
+        """Bundle resources from app and dependencies."""
+        from myapp import resources
+        from myapp_themes import assets
+        
+        return [resources, assets]
+    
+    def add_datas(self) -> list[tuple[str, str]]:
+        """Add custom data files."""
+        datas = super().add_datas()
+        
+        # Add license file
+        license_file = str(self.root_path() / "LICENSE")
+        datas.append((license_file, "."))
+        
+        return datas
+    
+    def app_icon_png_path(self) -> Path:
+        """Use custom icon location."""
+        return self.resources_path() / "icons" / "app.png"
+```
+
+Build with:
+
+```bash
+uv run pyrig build
+```
+
+Output: `dist/myapp-Linux` (or Windows/Darwin variant)
+
+## Troubleshooting
+
+### Missing Resources
+
+If resources aren't accessible at runtime:
+
+1. Verify the package is listed in `additional_resource_packages()`
+2. Check that the package has an `__init__.py` file
+3. Ensure you're using `importlib.resources` or `pyrig.src.resource` to access resources
+
+### Icon Not Appearing
+
+1. Verify `icon.png` exists in resources directory
+2. Check PNG format (256x256 recommended)
+3. For macOS, ensure PNG has proper dimensions for ICNS conversion
+
+### Build Fails
+
+1. Check PyInstaller is installed: `uv add --dev pyinstaller`
+2. Verify PIL/Pillow is available: `uv add --dev pillow`
+3. Run with verbose output: override `pyinstaller_options()` and add `--log-level DEBUG`
+
+## API Reference
+
+### PyInstallerBuilder Methods
+
+<ResponseField name="additional_resource_packages" type="method" required>
+  Return packages containing additional resources to bundle. Must be implemented by subclasses.
+  
+  **Returns:** Iterable[ModuleType] - Resource packages to bundle
+</ResponseField>
+
+<ResponseField name="default_additional_resource_packages" type="method">
+  Get resource packages from all pyrig-dependent packages. Automatically discovers `resources` modules.
+  
+  **Returns:** Generator[ModuleType, None, None] - Auto-discovered resource packages
+</ResponseField>
+
+<ResponseField name="all_resource_packages" type="method">
+  Get all resource packages (default + additional).
+  
+  **Returns:** Generator[ModuleType, None, None] - All resource packages
+</ResponseField>
+
+<ResponseField name="add_datas" type="method">
+  Build the `--add-data` arguments for PyInstaller.
+  
+  **Returns:** list[tuple[str, str]] - List of (source, destination) tuples
+</ResponseField>
+
+<ResponseField name="pyinstaller_options" type="method">
+  Build the complete PyInstaller command-line options.
+  
+  **Args:**
+  - `temp_artifacts_dir` (Path): Temporary directory for the executable
+  
+  **Returns:** tuple[str, ...] - Command-line arguments
+</ResponseField>
+
+<ResponseField name="app_icon_png_path" type="method">
+  Get the path to the application icon PNG. Override for custom icon location.
+  
+  **Returns:** Path - Path to icon.png
+</ResponseField>
+
+<ResponseField name="app_icon_path" type="method">
+  Get the platform-appropriate icon path (converts PNG to ICO/ICNS/PNG).
+  
+  **Args:**
+  - `temp_dir` (Path): Temporary directory for converted icon
+  
+  **Returns:** Path - Path to converted icon
+</ResponseField>
+
+<ResponseField name="convert_png_to_format" type="method">
+  Convert the application icon PNG to another format.
+  
+  **Args:**
+  - `file_format` (str): Target format ("ico", "icns", or "png")
+  - `temp_dir_path` (Path): Directory for converted icon
+  
+  **Returns:** Path - Path to converted icon
+</ResponseField>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Custom Builders" icon="hammer" href="/builders/custom-builders">
+    Create your own custom builders
+  </Card>
+  <Card title="Builders Overview" icon="box" href="/builders/overview">
+    Learn more about the builder system
+  </Card>
+</CardGroup>

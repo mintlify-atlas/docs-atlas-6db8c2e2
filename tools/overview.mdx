@@ -1,0 +1,307 @@
+---
+title: Tools Overview
+description: Type-safe command-line tool wrappers for Python development
+---
+
+## What are Tools?
+
+Tools in pyrig are type-safe wrappers around command-line utilities used in Python development workflows. Each tool provides a clean, composable API for constructing commands without sacrificing the flexibility of raw CLI usage.
+
+## The Tool Pattern
+
+All tools follow a consistent pattern:
+
+1. **Each tool is a `Tool` subclass** - Provides a consistent interface
+2. **Tool methods return `Args` objects** - Immutable command argument tuples
+3. **`Args` objects execute directly** - Call `.run()` to execute
+4. **All command construction is centralized** - Easy to test and maintain
+
+## Benefits
+
+<CardGroup cols={2}>
+  <Card title="Type Safety" icon="shield-check">
+    Arguments are validated at construction time, catching errors before execution
+  </Card>
+  <Card title="Composability" icon="puzzle-piece">
+    Args objects can be combined and extended for complex workflows
+  </Card>
+  <Card title="Testability" icon="flask">
+    Command construction can be tested without executing subprocess calls
+  </Card>
+  <Card title="Discoverability" icon="magnifying-glass">
+    IDE autocomplete shows all available commands and their parameters
+  </Card>
+</CardGroup>
+
+## Quick Example
+
+```python
+from pyrig.rig.tools.package_manager import PackageManager
+
+# Construct command arguments
+args = PackageManager.I.install_dependencies_args()
+
+# Inspect the command
+print(args)  # Output: uv sync
+
+# Execute the command
+result = args.run()
+print(result.returncode)  # 0
+```
+
+## Available Tools
+
+Pyrig includes wrappers for common development tools:
+
+<CardGroup cols={2}>
+  <Card title="Package Manager" icon="box" href="/tools/package-manager">
+    UV package manager wrapper for dependency management
+  </Card>
+  <Card title="Version Controller" icon="code-branch" href="/tools/version-controller">
+    Git wrapper for version control operations
+  </Card>
+  <Card title="Linter" icon="broom" href="/tools/linter">
+    Ruff linter and formatter wrapper
+  </Card>
+  <Card title="Type Checker" icon="check" href="/tools/type-checker">
+    Ty type checker wrapper
+  </Card>
+  <Card title="Project Tester" icon="vial" href="/tools/project-tester">
+    Pytest test runner wrapper
+  </Card>
+</CardGroup>
+
+## The Tool Base Class
+
+### Location
+
+`pyrig.rig.tools.base.base.Tool` (rig/tools/base/base.py:49)
+
+### Core Methods
+
+All Tool subclasses must implement:
+
+```python
+from abc import abstractmethod
+from pyrig.rig.tools.base.base import Tool
+from pyrig.src.processes import Args
+
+class MyTool(Tool):
+    @abstractmethod
+    def name(self) -> str:
+        """Return the command name (e.g., 'git', 'uv', 'pytest')"""
+        return "mytool"
+    
+    @abstractmethod
+    def group(self) -> str:
+        """Return the tool group for badge organization"""
+        return ToolGroup.TOOLING
+    
+    @abstractmethod
+    def badge_urls(self) -> tuple[str, str]:
+        """Return (badge_image_url, project_url) for README badges"""
+        return (
+            "https://img.shields.io/badge/MyTool-blue",
+            "https://example.com/mytool"
+        )
+```
+
+### The args() Method
+
+The base `args()` method constructs command arguments:
+
+```python
+def args(self, *args: str) -> Args:
+    """Construct command arguments with tool name prepended.
+    
+    Args:
+        *args: Command arguments.
+    
+    Returns:
+        Args object with tool name and arguments.
+    """
+    return Args((self.name(), *args))
+```
+
+### Example Usage
+
+```python
+class MyTool(Tool):
+    def name(self) -> str:
+        return "mytool"
+    
+    def build_args(self, *args: str) -> Args:
+        """Construct mytool build arguments."""
+        return self.args("build", *args)
+    
+    def test_args(self, verbose: bool = False) -> Args:
+        """Construct mytool test arguments."""
+        base = self.args("test")
+        if verbose:
+            return Args((*base, "--verbose"))
+        return base
+
+# Usage
+MyTool.I.build_args("--release").run()
+MyTool.I.test_args(verbose=True).run()
+```
+
+## The Args Class
+
+### Location
+
+`pyrig.src.processes.Args` (src/processes.py:121)
+
+### Overview
+
+`Args` is an immutable tuple subclass that represents a complete command ready for execution:
+
+```python
+class Args(tuple[str, ...]):
+    """Immutable command-line arguments container with execution capabilities."""
+    
+    def run(self, *args: str, **kwargs: Any) -> subprocess.CompletedProcess[Any]:
+        """Execute command via subprocess."""
+        return run_subprocess((*self, *args), **kwargs)
+    
+    def run_cached(self, *args: str, **kwargs: Any) -> subprocess.CompletedProcess[Any]:
+        """Execute command via cached subprocess."""
+        return run_subprocess_cached((*self, *args), **kwargs)
+```
+
+### Execution Methods
+
+<Tabs>
+  <Tab title="run()">
+    Execute the command immediately:
+    
+    ```python
+    args = PackageManager.I.add_dependencies_args("requests")
+    result = args.run()
+    
+    # With additional options
+    result = args.run(check=False, cwd="/path/to/project")
+    ```
+  </Tab>
+  <Tab title="run_cached()">
+    Execute with result caching for repeated calls:
+    
+    ```python
+    args = VersionController.I.config_get_user_name_args()
+    
+    # First call executes subprocess
+    result1 = args.run_cached()
+    
+    # Subsequent calls return cached result
+    result2 = args.run_cached()  # No subprocess call
+    ```
+  </Tab>
+</Tabs>
+
+### Common Parameters
+
+Both `run()` and `run_cached()` accept:
+
+- `check: bool = True` - Raise exception on non-zero exit code
+- `capture_output: bool = True` - Capture stdout/stderr
+- `cwd: str | Path | None = None` - Working directory
+- `timeout: int | None = None` - Command timeout in seconds
+- `text: bool = True` - Decode output as text
+
+## Customizing Tools
+
+You can customize tools by subclassing them:
+
+```python
+from pyrig.rig.tools.package_manager import PackageManager
+from pyrig.src.processes import Args
+
+class CustomPackageManager(PackageManager):
+    """Package manager with custom defaults."""
+    
+    def install_dependencies_args(self, *args: str) -> Args:
+        """Install dependencies with frozen versions."""
+        return super().install_dependencies_args("--frozen", *args)
+    
+    def dev_dependencies(self) -> tuple[str, ...]:
+        """Add custom dev dependencies."""
+        return (*super().dev_dependencies(), "ipython", "ipdb")
+```
+
+## Tool Groups
+
+Tools are organized into groups for badge organization:
+
+```python
+from pyrig.rig.tools.base.base import ToolGroup
+
+ToolGroup.CI_CD          # ci/cd
+ToolGroup.CODE_QUALITY   # code-quality
+ToolGroup.DOCUMENTATION  # documentation
+ToolGroup.PROJECT_INFO   # project-info
+ToolGroup.SECURITY       # security
+ToolGroup.TOOLING        # tooling
+ToolGroup.TESTING        # testing
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use the singleton instance .I">
+    All tools provide a singleton instance via `.I`:
+    
+    ```python
+    # Good
+    PackageManager.I.install_dependencies_args()
+    
+    # Also works, but unnecessary
+    PackageManager().install_dependencies_args()
+    ```
+  </Accordion>
+  
+  <Accordion title="Compose args for complex commands">
+    Build complex commands incrementally:
+    
+    ```python
+    base = Linter.I.check_args()
+    with_fix = Args((*base, "--fix"))
+    with_specific_files = Args((*with_fix, "src/", "tests/"))
+    with_specific_files.run()
+    ```
+  </Accordion>
+  
+  <Accordion title="Test without execution">
+    Test command construction without running subprocesses:
+    
+    ```python
+    def test_install_command():
+        args = PackageManager.I.install_dependencies_args("--no-dev")
+        assert str(args) == "uv sync --no-dev"
+        assert args == ("uv", "sync", "--no-dev")
+    ```
+  </Accordion>
+  
+  <Accordion title="Handle errors gracefully">
+    Use `check=False` for commands that may fail:
+    
+    ```python
+    result = VersionController.I.diff_quiet_args().run(check=False)
+    if result.returncode != 0:
+        print("Uncommitted changes detected")
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={3}>
+  <Card title="Package Manager" icon="box" href="/tools/package-manager">
+    Learn about UV package management
+  </Card>
+  <Card title="Version Controller" icon="code-branch" href="/tools/version-controller">
+    Explore Git operations
+  </Card>
+  <Card title="Code Quality" icon="broom" href="/tools/linter">
+    Configure linting and formatting
+  </Card>
+</CardGroup>

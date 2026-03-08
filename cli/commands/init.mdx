@@ -1,0 +1,183 @@
+---
+title: pyrig init
+description: Initialize a complete pyrig project from scratch
+---
+
+## Overview
+
+The `init` command transforms a basic Python project into a fully-configured, production-ready pyrig project through a comprehensive automated sequence. It orchestrates the entire project setup process, from version control initialization to running tests and creating the first commit.
+
+```bash
+uv run pyrig init
+```
+
+## What It Does
+
+The initialization sequence executes the following steps in order:
+
+<Steps>
+  <Step title="Initialize version control">
+    Runs `git init` to create a new Git repository if one doesn't exist.
+  </Step>
+  
+  <Step title="Add development dependencies">
+    Executes `uv add --group dev` to install all required development tools.
+  </Step>
+  
+  <Step title="Sync virtual environment">
+    Runs `uv sync` to ensure all dependencies are installed and up-to-date.
+  </Step>
+  
+  <Step title="Create project root">
+    Calls `mkroot` to generate all configuration files and directory structure.
+  </Step>
+  
+  <Step title="Re-sync environment">
+    Runs `uv sync` again to apply the newly generated configurations.
+  </Step>
+  
+  <Step title="Generate test skeletons">
+    Calls `mktests` to create test files mirroring the source structure.
+  </Step>
+  
+  <Step title="Install pre-commit hooks">
+    Executes `prek install` to set up Git hooks for code quality enforcement.
+  </Step>
+  
+  <Step title="Stage all files">
+    Runs `git add .` to add all generated files to version control.
+  </Step>
+  
+  <Step title="Run pre-commit hooks">
+    Executes pre-commit hooks to format and lint all files.
+  </Step>
+  
+  <Step title="Run test suite">
+    Executes `pytest` to ensure all generated tests pass.
+  </Step>
+  
+  <Step title="Create initial commit">
+    Makes the first Git commit with all project files.
+  </Step>
+</Steps>
+
+## Usage
+
+### First-Time Project Setup
+
+```bash
+# Start with a new directory
+cd my-project
+uv init
+uv add pyrig
+uv run pyrig init
+```
+
+### Expected Output
+
+```bash
+$ uv run pyrig init
+Initializing git repository...
+Adding development dependencies...
+Syncing virtual environment...
+Creating project configuration files...
+Generating test skeletons...
+Installing pre-commit hooks...
+Running pre-commit hooks...
+Running test suite...
+Creating initial commit...
+✓ Project initialized successfully!
+```
+
+### With Verbose Output
+
+```bash
+# See detailed step-by-step output
+uv run pyrig -v init
+
+# See module-level debugging
+uv run pyrig -vv init
+
+# See full diagnostic output with timestamps
+uv run pyrig -vvv init
+```
+
+### Quiet Mode
+
+```bash
+# Only show warnings and errors
+uv run pyrig -q init
+```
+
+## What You Get
+
+After running `init`, your project will have:
+
+- **Configuration files**: `pyproject.toml`, `.gitignore`, `.pre-commit-config.yaml`, etc.
+- **GitHub workflows**: CI/CD pipelines in `.github/workflows/`
+- **Test structure**: Complete test skeleton mirroring your source code
+- **Git hooks**: Pre-commit hooks for formatting and linting
+- **Working CLI**: Automatically generated CLI for your project
+- **Initial commit**: All files committed to version control
+
+## Behavior
+
+<ParamField path="Execution" type="sequential">
+  Each step executes sequentially. If any step fails, the process stops immediately.
+</ParamField>
+
+<ParamField path="Logging" type="automated">
+  The process is fully logged. Use `-v` flags for more detailed output.
+</ParamField>
+
+<ParamField path="Idempotency" type="partial">
+  Individual steps are idempotent, but the full sequence is designed for initial setup. Safe to re-run, but typically used only once.
+</ParamField>
+
+## Error Handling
+
+If any step fails, the command will:
+
+1. Stop execution immediately
+2. Display an error message
+3. Exit with a non-zero status code
+
+Common failure points:
+
+- **No Git installed**: Ensure Git is available in your PATH
+- **Missing dependencies**: Install system-level dependencies if required
+- **Test failures**: Fix any issues in generated test skeletons
+
+<Warning>
+  This command is designed for **new project setup**. Running it on an existing project may overwrite certain files (though pyrig respects opt-out markers).
+</Warning>
+
+## When to Use
+
+<CardGroup cols={2}>
+  <Card title="Use init when" icon="check">
+    - Setting up a brand new project
+    - Converting a basic Python project to pyrig
+    - You want a fully automated setup
+  </Card>
+  
+  <Card title="Don't use init when" icon="xmark">
+    - Updating an existing pyrig project (use `mkroot` instead)
+    - You only need to regenerate configs
+    - The project is already initialized
+  </Card>
+</CardGroup>
+
+## Related Commands
+
+- **[mkroot](/cli/commands/mkroot)** - Update configuration files only
+- **[mktests](/cli/commands/mktests)** - Generate test skeletons only
+- **[mkinits](/cli/commands/mkinits)** - Create `__init__.py` files only
+
+## Implementation
+
+The `init` command delegates to `Pyrigger.I.init_project()`, which orchestrates the entire initialization sequence. See `pyrig/rig/cli/commands/init_project.py:9`.
+
+<Note>
+  Run `uv run pyrig init --help` to see the command's built-in help text.
+</Note>

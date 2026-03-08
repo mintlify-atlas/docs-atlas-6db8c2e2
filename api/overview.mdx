@@ -1,0 +1,166 @@
+---
+title: API Reference Overview
+description: Complete API reference for pyrig's development toolkit
+---
+
+The pyrig API is organized into four main areas:
+
+## CLI Framework
+
+The CLI system provides dynamic command registration and discovery for building extensible command-line applications.
+
+- **Main entry point**: `pyrig.rig.cli.cli.main()`
+- **Command registration**: Automatic discovery from subcommands modules
+- **Logging configuration**: Flexible verbosity controls
+- **Multi-package support**: Commands inherited across dependency chains
+
+See [CLI API](/api/cli) for details.
+
+## Configuration System
+
+The configuration system provides declarative, idempotent management of project configuration files.
+
+- **Base classes**: `ConfigFile`, `DictConfigFile`, `TomlConfigFile`, etc.
+- **Automatic discovery**: All subclasses automatically validated
+- **Priority-based ordering**: Control validation sequence
+- **Intelligent merging**: Preserves user customizations
+
+See [Configuration API](/api/configs) for details.
+
+## Tool Wrappers
+
+Tool wrappers provide type-safe, composable command construction for CLI tools.
+
+- **Base class**: `Tool` for command argument construction
+- **Type safety**: Arguments validated at construction time
+- **Composability**: Args objects combined and extended
+- **Badge generation**: Automatic README badge creation
+
+See [Tools API](/api/tools) for details.
+
+## Artifact Builders
+
+Builders create distributable artifacts with platform-specific naming and organized output.
+
+- **Base class**: `BuilderConfigFile` for artifact generation
+- **PyInstaller support**: `PyInstallerBuilder` for standalone executables
+- **Resource bundling**: Automatic resource collection and packaging
+- **Platform-specific output**: Automatic naming with OS suffixes
+
+See [Builders API](/api/builders) for details.
+
+## Architecture
+
+### Dependency Subclass Pattern
+
+All major pyrig components (`ConfigFile`, `Tool`, `BuilderConfigFile`) extend `DependencySubclass`, which provides:
+
+- **Automatic discovery**: Subclasses automatically found across dependency chains
+- **Multi-package support**: Projects inherit functionality from dependencies
+- **Sorting and filtering**: Flexible subclass organization
+- **Singleton access**: Convenient `.I` instance property
+
+### Module Discovery
+
+Pyrig uses a sophisticated module discovery system to find equivalent modules across the dependency chain:
+
+```python
+from pyrig.src.modules.package import discover_equivalent_modules_across_dependents
+
+# Find all rig.cli.shared_subcommands modules from pyrig to current package
+modules = discover_equivalent_modules_across_dependents(
+    shared_subcommands,
+    pyrig,
+    until_package=current_package,
+)
+```
+
+This enables:
+- Shared commands available in all dependent projects
+- Configuration inheritance across packages
+- Resource bundling from multiple packages
+
+## Usage Patterns
+
+### Creating Custom Commands
+
+Add commands to `<package>.rig.cli.subcommands`:
+
+```python
+def deploy() -> None:
+    '''Deploy the application.'''
+    # Implementation
+```
+
+### Creating Configuration Files
+
+Extend base config classes:
+
+```python
+from pathlib import Path
+from pyrig.rig.configs.base.toml import TomlConfigFile
+
+class MyAppConfigFile(TomlConfigFile):
+    def parent_path(self) -> Path:
+        return Path()
+    
+    def _configs(self) -> dict:
+        return {"app": {"name": "myapp", "version": "1.0.0"}}
+```
+
+### Creating Tool Wrappers
+
+Extend the `Tool` base class:
+
+```python
+from pyrig.rig.tools.base.base import Tool, ToolGroup
+from pyrig.src.processes import Args
+
+class MyTool(Tool):
+    def name(self) -> str:
+        return "mytool"
+    
+    def group(self) -> str:
+        return ToolGroup.TOOLING
+    
+    def build_args(self, *args: str) -> Args:
+        return self.args("build", *args)
+```
+
+### Creating Builders
+
+Extend `BuilderConfigFile` or `PyInstallerBuilder`:
+
+```python
+from pathlib import Path
+from pyrig.rig.builders.base.base import BuilderConfigFile
+
+class MyBuilder(BuilderConfigFile):
+    def create_artifacts(self, temp_artifacts_dir: Path) -> None:
+        output = temp_artifacts_dir / "my_artifact.zip"
+        # Build logic
+```
+
+## Type Annotations
+
+Pyrig uses modern Python type annotations extensively:
+
+```python
+from pyrig.rig.configs.base.base import ConfigDict, ConfigList, ConfigData
+
+# Configuration types
+type ConfigDict = dict[str, Any]
+type ConfigList = list[Any]
+type ConfigData = ConfigDict | ConfigList
+
+# Generic bounded by ConfigData
+class ConfigFile[ConfigT: ConfigData]:
+    ...
+```
+
+## Next Steps
+
+- [CLI API](/api/cli) - Command-line interface framework
+- [Configuration API](/api/configs) - Configuration file management
+- [Tools API](/api/tools) - CLI tool wrappers
+- [Builders API](/api/builders) - Artifact builders

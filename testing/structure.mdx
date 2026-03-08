@@ -1,0 +1,419 @@
+---
+title: Test Structure
+description: Understanding pyrig's test infrastructure and conventions
+---
+
+## Overview
+
+Pyrig enforces a structured approach to testing that ensures comprehensive test coverage and maintainability. The test infrastructure is built on pytest and provides automatic fixture discovery, test skeleton generation, and project validation.
+
+## Test Directory Structure
+
+Tests mirror the source code structure with the `test_` prefix:
+
+```
+myapp/
+  pyrig/
+    src/
+      utils.py
+      database.py
+    rig/
+      builders/
+        custom.py
+  tests/
+    test_myapp/
+      test_pyrig/
+        test_src/
+          test_utils.py       # Tests for src/utils.py
+          test_database.py    # Tests for src/database.py
+        test_rig/
+          test_builders/
+            test_custom.py    # Tests for rig/builders/custom.py
+```
+
+## Naming Conventions
+
+Pyrig follows strict naming conventions:
+
+### Modules
+- **Source**: `my_module.py`
+- **Test**: `test_my_module.py`
+
+### Functions
+- **Source**: `def calculate():`
+- **Test**: `def test_calculate():`
+
+### Classes
+- **Source**: `class DataProcessor:`
+- **Test**: `class TestDataProcessor:`
+
+### Methods
+- **Source**: `def process(self):`
+- **Test**: `def test_process(self):`
+
+## Test Skeleton Generation
+
+Pyrig automatically generates test skeletons for untested code. This is enforced by the `assert_all_modules_tested` autouse fixture.
+
+### Automatic Generation
+
+When you run tests, pyrig:
+
+1. **Scans all source modules** for functions, classes, and methods
+2. **Checks for corresponding tests** using naming conventions
+3. **Generates skeletons** for missing tests
+4. **Fails the test run** with a list of generated files
+
+### Example
+
+Given this source code:
+
+```python
+# myapp/pyrig/src/calculator.py
+
+def add(a: int, b: int) -> int:
+    """Add two numbers."""
+    return a + b
+
+def subtract(a: int, b: int) -> int:
+    """Subtract two numbers."""
+    return a - b
+
+class Calculator:
+    """Calculator class."""
+    
+    def multiply(self, a: int, b: int) -> int:
+        """Multiply two numbers."""
+        return a * b
+```
+
+Running `pytest` generates this test skeleton:
+
+```python
+# tests/test_myapp/test_pyrig/test_src/test_calculator.py
+"""Test module."""
+
+def test_add() -> None:
+    """Test function."""
+    raise NotImplementedError
+
+def test_subtract() -> None:
+    """Test function."""
+    raise NotImplementedError
+
+class TestCalculator:
+    """Test class."""
+    
+    def test_multiply(self) -> None:
+        """Test method."""
+        raise NotImplementedError
+```
+
+### Manual Generation
+
+Generate test skeletons manually using the `mktests` command:
+
+```bash
+# Generate tests for all modules
+uv run pyrig mktests
+
+# Generate tests for specific module
+uv run pyrig mktests myapp.pyrig.src.calculator
+```
+
+## Mirror Testing Pattern
+
+The mirror testing pattern ensures every source module has a corresponding test module. This is implemented by the `MirrorTestConfigFile` class.
+
+### How It Works
+
+1. **Module Discovery** - Scans all source modules
+2. **Path Derivation** - Calculates test file path from source path
+3. **Content Analysis** - Identifies untested functions/classes/methods
+4. **Skeleton Generation** - Creates test skeletons for missing tests
+5. **Non-Destructive Merge** - Preserves existing test code
+
+### Example: Creating Mirror Tests
+
+```python
+from types import ModuleType
+from pyrig.rig.tests.mirror_test import MirrorTestConfigFile
+import myapp.pyrig.src.calculator
+
+# Create mirror test for a specific module
+class CalculatorMirrorTest(MirrorTestConfigFile):
+    
+    def src_module(self) -> ModuleType:
+        return myapp.pyrig.src.calculator
+
+# Trigger test generation
+CalculatorMirrorTest()  # Creates tests/test_myapp/test_pyrig/test_src/test_calculator.py
+```
+
+### Batch Processing
+
+Generate tests for multiple modules:
+
+```python
+from pyrig.rig.tests.mirror_test import MirrorTestConfigFile
+import myapp.pyrig.src.calculator
+import myapp.pyrig.src.database
+import myapp.pyrig.src.utils
+
+# Create tests for multiple modules
+modules = [
+    myapp.pyrig.src.calculator,
+    myapp.pyrig.src.database,
+    myapp.pyrig.src.utils,
+]
+
+MirrorTestConfigFile.I.create_test_modules(modules)
+```
+
+### Generate Tests for Entire Package
+
+```python
+from pyrig.rig.tests.mirror_test import MirrorTestConfigFile
+import myapp.pyrig.src
+
+# Create tests for all modules in a package
+MirrorTestConfigFile.I.create_test_modules_for_package(myapp.pyrig.src)
+```
+
+## Test Configuration
+
+Pyrig uses pytest plugins for automatic fixture discovery.
+
+### conftest.py
+
+Every project has a `tests/conftest.py` that loads pyrig's test infrastructure:
+
+```python
+# tests/conftest.py
+"""Pytest configuration for tests.
+
+This defines the pyrig pytest plugin that provides access to pyrig's test
+infrastructure, including fixtures, hooks, and test utilities.
+"""
+
+pytest_plugins = ["pyrig.rig.tests.conftest"]
+```
+
+This enables:
+- Automatic fixture discovery
+- Autouse fixtures for validation
+- Test utilities and helpers
+
+### Fixture Discovery
+
+Pyrig automatically discovers fixtures from:
+
+1. **pyrig's fixtures** - Built-in fixtures from `pyrig.rig.tests.fixtures`
+2. **Dependent package fixtures** - Fixtures from packages depending on pyrig
+3. **Project fixtures** - Fixtures in your project's `tests/` directory
+
+All fixtures are available in all test modules without explicit imports.
+
+## Writing Tests
+
+### Basic Test
+
+```python
+# tests/test_myapp/test_pyrig/test_src/test_calculator.py
+
+def test_add() -> None:
+    """Test the add function."""
+    from myapp.pyrig.src.calculator import add
+    
+    result = add(2, 3)
+    assert result == 5
+```
+
+### Testing Classes
+
+```python
+class TestCalculator:
+    """Test Calculator class."""
+    
+    def test_multiply(self) -> None:
+        """Test multiply method."""
+        from myapp.pyrig.src.calculator import Calculator
+        
+        calc = Calculator()
+        result = calc.multiply(4, 5)
+        assert result == 20
+```
+
+### Using Fixtures
+
+```python
+import pytest
+from pathlib import Path
+
+def test_file_creation(tmp_path: Path) -> None:
+    """Test file creation using tmp_path fixture."""
+    file = tmp_path / "test.txt"
+    file.write_text("content")
+    assert file.exists()
+    assert file.read_text() == "content"
+```
+
+### Testing ConfigFiles
+
+Use the `config_file_factory` fixture to test ConfigFile subclasses:
+
+```python
+from pathlib import Path
+from collections.abc import Callable
+from pyrig.rig.configs.base.base import ConfigFile
+from myapp.rig.configs.my_config import MyConfig
+
+def test_my_config(
+    config_file_factory: Callable[[type[ConfigFile]], type[ConfigFile]],
+    tmp_path: Path
+) -> None:
+    """Test custom config file."""
+    # Create test config that uses tmp_path
+    TestMyConfig = config_file_factory(MyConfig)
+    
+    # Validate config
+    TestMyConfig().validate()
+    
+    # Check config was created
+    assert TestMyConfig().path().exists()
+```
+
+See [Testing Best Practices](/testing/best-practices) for more examples.
+
+## Running Tests
+
+### Run All Tests
+
+```bash
+# Run all tests
+uv run pytest
+
+# Run with verbose output
+uv run pytest -v
+
+# Run with coverage
+uv run pytest --cov
+```
+
+### Run Specific Tests
+
+```bash
+# Run tests in a specific file
+uv run pytest tests/test_myapp/test_pyrig/test_src/test_calculator.py
+
+# Run a specific test function
+uv run pytest tests/test_myapp/test_pyrig/test_src/test_calculator.py::test_add
+
+# Run a specific test class
+uv run pytest tests/test_myapp/test_pyrig/test_src/test_calculator.py::TestCalculator
+
+# Run a specific test method
+uv run pytest tests/test_myapp/test_pyrig/test_src/test_calculator.py::TestCalculator::test_multiply
+```
+
+### Run Tests by Pattern
+
+```bash
+# Run tests matching a pattern
+uv run pytest -k "test_add"
+
+# Run tests NOT matching a pattern
+uv run pytest -k "not test_slow"
+
+# Run tests matching multiple patterns
+uv run pytest -k "test_add or test_subtract"
+```
+
+### Run Tests with Markers
+
+```bash
+# Run tests marked as slow
+uv run pytest -m slow
+
+# Run tests NOT marked as slow
+uv run pytest -m "not slow"
+```
+
+## Test Organization
+
+### Group Related Tests
+
+```python
+class TestCalculatorBasicOperations:
+    """Test basic calculator operations."""
+    
+    def test_add(self) -> None:
+        """Test addition."""
+        # ...
+    
+    def test_subtract(self) -> None:
+        """Test subtraction."""
+        # ...
+
+class TestCalculatorAdvancedOperations:
+    """Test advanced calculator operations."""
+    
+    def test_power(self) -> None:
+        """Test exponentiation."""
+        # ...
+    
+    def test_root(self) -> None:
+        """Test square root."""
+        # ...
+```
+
+### Use Fixtures for Setup
+
+```python
+import pytest
+from myapp.pyrig.src.database import Database
+
+@pytest.fixture
+def db(tmp_path):
+    """Create a test database."""
+    db = Database(tmp_path / "test.db")
+    db.create_tables()
+    yield db
+    db.close()
+
+class TestDatabase:
+    """Test Database class."""
+    
+    def test_insert(self, db: Database) -> None:
+        """Test inserting data."""
+        db.insert("users", {"name": "Alice"})
+        assert db.count("users") == 1
+    
+    def test_query(self, db: Database) -> None:
+        """Test querying data."""
+        db.insert("users", {"name": "Bob"})
+        result = db.query("users", {"name": "Bob"})
+        assert len(result) == 1
+```
+
+## Test Coverage Enforcement
+
+Pyrig's autouse fixtures enforce test coverage:
+
+- **`assert_all_modules_tested`** - Every module must have a test module
+- **`assert_root_is_correct`** - Project structure must be correct
+- **`assert_no_namespace_packages`** - All packages must have `__init__.py`
+- **`assert_src_does_not_use_rig`** - Source code cannot import rig code
+
+See [Autouse Fixtures](/testing/autouse-fixtures) for details.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Autouse Fixtures" icon="magic" href="/testing/autouse-fixtures">
+    Learn about automatic test validation
+  </Card>
+  <Card title="Best Practices" icon="star" href="/testing/best-practices">
+    Testing best practices and patterns
+  </Card>
+</CardGroup>

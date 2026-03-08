@@ -1,0 +1,574 @@
+---
+title: Project Tester
+description: Pytest test runner wrapper for automated testing
+---
+
+## Overview
+
+The `ProjectTester` class provides a type-safe wrapper around [pytest](https://pytest.org), the popular Python testing framework. It offers methods for running tests with various configurations, particularly optimized for CI/CD environments.
+
+## Location
+
+`pyrig.rig.tools.project_tester.ProjectTester` (rig/tools/project_tester.py:14)
+
+## Quick Start
+
+```python
+from pyrig.rig.tools.project_tester import ProjectTester
+
+# Run all tests
+ProjectTester.I.test_args().run()
+
+# Run tests with CI configuration
+ProjectTester.I.run_tests_in_ci_args().run()
+
+# Run specific test file
+ProjectTester.I.test_args("tests/test_main.py").run()
+
+# Run specific test function
+ProjectTester.I.test_args("tests/test_main.py::test_function").run()
+```
+
+## Basic Testing
+
+### Run Tests
+
+```python
+def test_args(self, *args: str) -> Args:
+    """Construct pytest arguments.
+    
+    Args:
+        *args: Pytest command arguments.
+    
+    Returns:
+        Args for 'pytest'.
+    """
+    return self.args(*args)
+
+# Usage - run all tests
+ProjectTester.I.test_args().run()
+
+# Run with verbose output
+ProjectTester.I.test_args("-v").run()
+
+# Run with very verbose output
+ProjectTester.I.test_args("-vv").run()
+
+# Run with output capture disabled (see print statements)
+ProjectTester.I.test_args("-s").run()
+```
+
+## CI/CD Testing
+
+### Run Tests in CI
+
+```python
+def run_tests_in_ci_args(self, *args: str) -> Args:
+    """Construct pytest arguments for CI.
+    
+    Configures pytest with CI-optimized settings:
+    - Log level set to INFO for better debugging
+    - Coverage report in XML format for CI tools
+    
+    Args:
+        *args: Pytest command arguments.
+    
+    Returns:
+        Args for 'pytest' with CI flags.
+    """
+    return self.test_args("--log-cli-level=INFO", "--cov-report=xml", *args)
+
+# Usage
+ProjectTester.I.run_tests_in_ci_args().run()
+
+# Run specific tests in CI
+ProjectTester.I.run_tests_in_ci_args("tests/integration/").run()
+```
+
+## Test Selection
+
+<Tabs>
+  <Tab title="By File">
+    ```python
+    # Run tests in specific file
+    ProjectTester.I.test_args("tests/test_main.py").run()
+    
+    # Run tests in multiple files
+    ProjectTester.I.test_args(
+        "tests/test_main.py",
+        "tests/test_utils.py"
+    ).run()
+    ```
+  </Tab>
+  <Tab title="By Directory">
+    ```python
+    # Run tests in directory
+    ProjectTester.I.test_args("tests/unit/").run()
+    
+    # Run tests in multiple directories
+    ProjectTester.I.test_args(
+        "tests/unit/",
+        "tests/integration/"
+    ).run()
+    ```
+  </Tab>
+  <Tab title="By Test Name">
+    ```python
+    # Run specific test function
+    ProjectTester.I.test_args(
+        "tests/test_main.py::test_function"
+    ).run()
+    
+    # Run specific test class
+    ProjectTester.I.test_args(
+        "tests/test_main.py::TestClass"
+    ).run()
+    
+    # Run specific test method
+    ProjectTester.I.test_args(
+        "tests/test_main.py::TestClass::test_method"
+    ).run()
+    ```
+  </Tab>
+  <Tab title="By Marker">
+    ```python
+    # Run tests with specific marker
+    ProjectTester.I.test_args("-m", "slow").run()
+    
+    # Run tests without specific marker
+    ProjectTester.I.test_args("-m", "not slow").run()
+    
+    # Combine markers
+    ProjectTester.I.test_args("-m", "unit and not slow").run()
+    ```
+  </Tab>
+</Tabs>
+
+## Test Configuration
+
+### Configuration Methods
+
+```python
+def coverage_threshold(self) -> int:
+    """Get minimum test coverage percentage threshold.
+    
+    Returns:
+        Coverage percentage (90).
+    """
+    return 90
+
+def tests_package_name(self) -> str:
+    """Get tests package name.
+    
+    Returns:
+        The 'tests' package name string.
+    """
+    return "tests"
+
+def dev_dependencies(self) -> tuple[str, ...]:
+    """Get tool dependencies.
+    
+    Returns:
+        Tuple of tool dependencies including pytest-mock.
+    """
+    return (*super().dev_dependencies(), "pytest-mock")
+
+# Usage
+print(f"Coverage threshold: {ProjectTester.I.coverage_threshold()}%")
+print(f"Tests directory: {ProjectTester.I.tests_package_name()}")
+print(f"Dependencies: {ProjectTester.I.dev_dependencies()}")
+```
+
+## Common Options
+
+### Output Control
+
+```python
+# Verbose output
+ProjectTester.I.test_args("-v").run()
+
+# Very verbose output
+ProjectTester.I.test_args("-vv").run()
+
+# Quiet output
+ProjectTester.I.test_args("-q").run()
+
+# Show print statements
+ProjectTester.I.test_args("-s").run()
+
+# Show local variables in tracebacks
+ProjectTester.I.test_args("-l").run()
+```
+
+### Test Execution
+
+```python
+# Stop after first failure
+ProjectTester.I.test_args("-x").run()
+
+# Stop after N failures
+ProjectTester.I.test_args("--maxfail=3").run()
+
+# Run tests in parallel (requires pytest-xdist)
+ProjectTester.I.test_args("-n", "auto").run()
+
+# Rerun failed tests first
+ProjectTester.I.test_args("--failed-first").run()
+
+# Only run tests that failed last time
+ProjectTester.I.test_args("--last-failed").run()
+```
+
+### Coverage Options
+
+```python
+# Run with coverage
+ProjectTester.I.test_args("--cov=src").run()
+
+# Coverage with HTML report
+ProjectTester.I.test_args("--cov=src", "--cov-report=html").run()
+
+# Coverage with terminal report
+ProjectTester.I.test_args("--cov=src", "--cov-report=term-missing").run()
+
+# Coverage with XML report (for CI)
+ProjectTester.I.test_args("--cov=src", "--cov-report=xml").run()
+
+# Fail if coverage is below threshold
+ProjectTester.I.test_args(
+    "--cov=src",
+    f"--cov-fail-under={ProjectTester.I.coverage_threshold()}"
+).run()
+```
+
+## Common Workflows
+
+### Pre-commit Testing
+
+```python
+from pyrig.rig.tools.project_tester import ProjectTester
+
+def pre_commit_tests() -> bool:
+    """Run fast tests before committing."""
+    # Run unit tests only
+    result = ProjectTester.I.test_args(
+        "-m", "unit",
+        "-x",  # Stop on first failure
+        "-v"
+    ).run(check=False)
+    
+    if result.returncode != 0:
+        print("Tests failed")
+        return False
+    
+    print("✓ All tests passed")
+    return True
+
+if not pre_commit_tests():
+    print("Fix failing tests before committing")
+```
+
+### CI/CD Testing
+
+```python
+from pyrig.rig.tools.project_tester import ProjectTester
+import sys
+
+def ci_tests():
+    """Run comprehensive tests for CI/CD."""
+    result = ProjectTester.I.run_tests_in_ci_args(
+        "--cov=src",
+        f"--cov-fail-under={ProjectTester.I.coverage_threshold()}",
+        "-v"
+    ).run(check=False)
+    
+    if result.returncode != 0:
+        print("✗ Tests failed")
+        sys.exit(1)
+    
+    print("✓ All tests passed with sufficient coverage")
+
+ci_tests()
+```
+
+### Test Different Environments
+
+```python
+from pyrig.rig.tools.project_tester import ProjectTester
+
+def test_all_environments():
+    """Run tests in different configurations."""
+    environments = [
+        ("unit", ["tests/unit/"]),
+        ("integration", ["tests/integration/"]),
+        ("e2e", ["tests/e2e/"])
+    ]
+    
+    for env_name, paths in environments:
+        print(f"\nRunning {env_name} tests...")
+        result = ProjectTester.I.test_args(*paths, "-v").run(check=False)
+        
+        if result.returncode != 0:
+            print(f"✗ {env_name} tests failed")
+            return False
+        
+        print(f"✓ {env_name} tests passed")
+    
+    return True
+
+if test_all_environments():
+    print("\n✓ All environment tests passed")
+```
+
+## Integration with Other Tools
+
+### With Package Manager
+
+```python
+from pyrig.rig.tools.project_tester import ProjectTester
+from pyrig.rig.tools.package_manager import PackageManager
+
+# Install test dependencies
+PackageManager.I.add_dev_dependencies_args(
+    "pytest",
+    "pytest-cov",
+    "pytest-mock",
+    "pytest-xdist"
+).run()
+
+# Run tests via uv run
+PackageManager.I.run_args("pytest", "-v").run()
+
+# Or use ProjectTester wrapper
+ProjectTester.I.test_args("-v").run()
+```
+
+### With Linter and Type Checker
+
+```python
+from pyrig.rig.tools.project_tester import ProjectTester
+from pyrig.rig.tools.linter import Linter
+from pyrig.rig.tools.type_checker import TypeChecker
+
+def quality_check():
+    """Run all quality checks."""
+    checks = [
+        ("Linting", lambda: Linter.I.check_args().run(check=False)),
+        ("Type Checking", lambda: TypeChecker.I.check_args().run(check=False)),
+        ("Tests", lambda: ProjectTester.I.test_args().run(check=False))
+    ]
+    
+    all_passed = True
+    for name, check_fn in checks:
+        print(f"\n{name}...")
+        result = check_fn()
+        if result.returncode != 0:
+            print(f"  ✗ {name} failed")
+            all_passed = False
+        else:
+            print(f"  ✓ {name} passed")
+    
+    return all_passed
+
+quality_check()
+```
+
+## Advanced Usage
+
+### Custom pytest.ini Configuration
+
+```ini
+# pytest.ini
+[pytest]
+testpaths = tests
+python_files = test_*.py
+python_classes = Test*
+python_functions = test_*
+addopts =
+    -v
+    --strict-markers
+    --tb=short
+    --cov=src
+    --cov-report=term-missing
+markers =
+    unit: Unit tests
+    integration: Integration tests
+    slow: Slow tests
+    skip_ci: Skip in CI
+```
+
+Pytest will use these settings automatically:
+
+```python
+# Uses configuration from pytest.ini
+ProjectTester.I.test_args().run()
+```
+
+### Generate Test Reports
+
+```python
+from pyrig.rig.tools.project_tester import ProjectTester
+
+# Generate JUnit XML report
+ProjectTester.I.test_args(
+    "--junit-xml=test-results.xml"
+).run()
+
+# Generate HTML report (requires pytest-html)
+ProjectTester.I.test_args(
+    "--html=report.html",
+    "--self-contained-html"
+).run()
+
+# Generate multiple report formats
+ProjectTester.I.run_tests_in_ci_args(
+    "--junit-xml=test-results.xml",
+    "--html=report.html",
+    "--self-contained-html"
+).run()
+```
+
+## Customization
+
+Override methods to customize test behavior:
+
+```python
+from pyrig.rig.tools.project_tester import ProjectTester
+from pyrig.src.processes import Args
+
+class StrictProjectTester(ProjectTester):
+    """Project tester with strict defaults."""
+    
+    def coverage_threshold(self) -> int:
+        """Require 95% coverage."""
+        return 95
+    
+    def test_args(self, *args: str) -> Args:
+        """Always use verbose mode and coverage."""
+        return super().test_args(
+            "-vv",
+            "--cov=src",
+            "--cov-report=term-missing",
+            f"--cov-fail-under={self.coverage_threshold()}",
+            *args
+        )
+
+# Use custom tester
+StrictProjectTester.I.test_args().run()
+```
+
+## Tool Configuration
+
+```python
+# Get tool name
+ProjectTester.I.name()  # Returns: 'pytest'
+
+# Get tool group
+ProjectTester.I.group()  # Returns: 'testing'
+
+# Get badge URLs for README
+badge_url, project_url = ProjectTester.I.badge_urls()
+# badge_url: https://img.shields.io/badge/tested%20with-pytest-46a2f1.svg?logo=pytest
+# project_url: https://pytest.org
+
+# Get dev dependencies
+ProjectTester.I.dev_dependencies()  # Returns: ('pytest', 'pytest-mock')
+```
+
+## Complete Example
+
+```python
+from pyrig.rig.tools.project_tester import ProjectTester
+from pyrig.rig.tools.linter import Linter
+from pyrig.rig.tools.type_checker import TypeChecker
+from pyrig.rig.tools.version_controller import VersionController
+import sys
+
+def complete_validation():
+    """Complete validation pipeline."""
+    print("=" * 60)
+    print("Starting complete validation pipeline")
+    print("=" * 60)
+    
+    # 1. Format and lint
+    print("\n1. Formatting and linting...")
+    Linter.I.format_args().run()
+    result = Linter.I.check_args().run(check=False)
+    if result.returncode != 0:
+        print("  ✗ Linting failed")
+        sys.exit(1)
+    print("  ✓ Formatting and linting passed")
+    
+    # 2. Type checking
+    print("\n2. Type checking...")
+    result = TypeChecker.I.check_args().run(check=False)
+    if result.returncode != 0:
+        print("  ✗ Type checking failed")
+        sys.exit(1)
+    print("  ✓ Type checking passed")
+    
+    # 3. Unit tests
+    print("\n3. Running unit tests...")
+    result = ProjectTester.I.test_args(
+        "-m", "unit",
+        "--cov=src",
+        "-v"
+    ).run(check=False)
+    if result.returncode != 0:
+        print("  ✗ Unit tests failed")
+        sys.exit(1)
+    print("  ✓ Unit tests passed")
+    
+    # 4. Integration tests
+    print("\n4. Running integration tests...")
+    result = ProjectTester.I.test_args(
+        "-m", "integration",
+        "-v"
+    ).run(check=False)
+    if result.returncode != 0:
+        print("  ✗ Integration tests failed")
+        sys.exit(1)
+    print("  ✓ Integration tests passed")
+    
+    # 5. Full test suite with coverage
+    print("\n5. Running full test suite with coverage...")
+    result = ProjectTester.I.run_tests_in_ci_args(
+        "--cov=src",
+        f"--cov-fail-under={ProjectTester.I.coverage_threshold()}",
+        "-v"
+    ).run(check=False)
+    if result.returncode != 0:
+        print("  ✗ Full test suite failed or insufficient coverage")
+        sys.exit(1)
+    print("  ✓ Full test suite passed with sufficient coverage")
+    
+    # 6. Verify no uncommitted changes
+    print("\n6. Checking for uncommitted changes...")
+    if VersionController.I.has_unstaged_diff():
+        print("  ✗ Uncommitted changes detected")
+        sys.exit(1)
+    print("  ✓ No uncommitted changes")
+    
+    print("\n" + "=" * 60)
+    print("✓ All validation checks passed!")
+    print("=" * 60)
+
+complete_validation()
+```
+
+## See Also
+
+<CardGroup cols={2}>
+  <Card title="Pytest Documentation" icon="book" href="https://docs.pytest.org/">
+    Official pytest documentation
+  </Card>
+  <Card title="Linter" icon="broom" href="/tools/linter">
+    Ruff linter and formatter wrapper
+  </Card>
+  <Card title="Type Checker" icon="check" href="/tools/type-checker">
+    Ty type checker wrapper
+  </Card>
+  <Card title="Tools Overview" icon="wrench" href="/tools/overview">
+    Learn about the Tool pattern
+  </Card>
+</CardGroup>

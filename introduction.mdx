@@ -1,0 +1,181 @@
+---
+title: Introduction
+description: A Python toolkit that rigs up your project by standardizing and automating project setup, configuration, and maintenance
+---
+
+## What is pyrig?
+
+pyrig generates and maintains a complete, production-ready Python project from a single command. It creates all the files you need — source structure, tests, CI/CD, documentation, configs — and keeps them in sync as your project evolves. Rerun it anytime: pyrig is idempotent.
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Get up and running with pyrig in under 2 minutes
+  </Card>
+  <Card title="Architecture" icon="diagram-project" href="/architecture">
+    Understand the core systems that power pyrig
+  </Card>
+</CardGroup>
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Idempotent Scaffolding" icon="repeat">
+    Run `pyrig init` to generate a complete project. Run it again anytime to sync — pyrig never overwrites your customizations.
+  </Card>
+  
+  <Card title="Config File System" icon="file-code">
+    Every generated file is backed by a Python class that validates and merges automatically. Override any config by subclassing.
+  </Card>
+  
+  <Card title="Automatic CLI" icon="terminal">
+    Your project gets a working CLI immediately. Add commands by defining functions — they're discovered automatically.
+  </Card>
+  
+  <Card title="Testing Infrastructure" icon="flask">
+    pytest with autouse fixtures that enforce best practices. `pyrig mktests` generates test skeletons mirroring your source.
+  </Card>
+  
+  <Card title="Multi-Package Inheritance" icon="layer-group">
+    Create a personal pyrig package with your own standards, add it as a dependency, and have everything apply automatically.
+  </Card>
+  
+  <Card title="Tool Wrappers" icon="wrench">
+    Type-safe wrappers around uv, git, ruff, pytest, and more. Customizable via subclassing for org-wide overrides.
+  </Card>
+</CardGroup>
+
+## What You Get
+
+When you run `pyrig init`, you get a complete project structure:
+
+```bash
+my-project/
+├── my_project/          # Source package
+│   ├── __init__.py
+│   ├── main.py          # CLI entry point
+│   ├── src/             # Utility modules
+│   ├── rig/             # Development infrastructure
+│   │   ├── builders/    # Build system
+│   │   ├── cli/         # CLI commands
+│   │   ├── configs/     # Config file managers
+│   │   ├── tools/       # Tool wrappers
+│   │   └── tests/       # Test infrastructure
+├── tests/               # Test suite
+├── docs/                # Documentation
+├── .github/             # CI/CD workflows
+├── pyproject.toml       # Project metadata
+├── .gitignore
+└── README.md
+```
+
+## Core Philosophy
+
+pyrig is built around three principles:
+
+### 1. Declarative Over Imperative
+
+You declare what should exist, pyrig makes it happen. Configuration files are defined as Python classes that specify expected structure:
+
+```python
+from pathlib import Path
+from pyrig.rig.configs.base.toml import TomlConfigFile
+
+class MyConfigFile(TomlConfigFile):
+    def parent_path(self) -> Path:
+        return Path()
+
+    def _configs(self) -> dict:
+        return {
+            "tool": {
+                "myapp": {
+                    "setting": "value"
+                }
+            }
+        }
+```
+
+Run `pyrig mkroot` and the file is created or updated, preserving any user customizations.
+
+### 2. Idempotent by Default
+
+Every operation is safe to run multiple times. pyrig never overwrites your changes — it validates, merges, and preserves:
+
+- Missing keys are added
+- Extra keys you added are preserved
+- Final structure matches expected configuration
+- Opt-out by emptying the file
+
+### 3. Extensible Through Inheritance
+
+Almost everything in pyrig can be overridden by subclassing. The `.I` pattern (Instance) and `.L` pattern (Leaf) automatically discover your implementations:
+
+```python
+from pyrig.rig.tools.package_manager import PackageManager
+
+class MyPackageManager(PackageManager):
+    def install_dependencies_args(self) -> Args:
+        # Custom implementation
+        return self.args("sync", "--frozen")
+
+# Automatically used everywhere
+PackageManager.I.install_dependencies_args()
+```
+
+This enables creating **organization-wide standards** by publishing your own pyrig extension package.
+
+## Use Cases
+
+<CardGroup cols={2}>
+  <Card title="New Projects" icon="plus">
+    Bootstrap a production-ready Python project with full CI/CD, testing, and documentation in seconds.
+  </Card>
+  
+  <Card title="Existing Projects" icon="arrows-rotate">
+    Standardize your existing project's structure, tooling, and workflows incrementally.
+  </Card>
+  
+  <Card title="Organization Standards" icon="building">
+    Create a company-wide pyrig extension with your organization's standards and share across all projects.
+  </Card>
+  
+  <Card title="Multi-Project Tooling" icon="network-wired">
+    Build CLI tools that work consistently across multiple pyrig-based projects.
+  </Card>
+</CardGroup>
+
+## Requirements
+
+- **Python**: 3.12+
+- **Package Manager**: uv (recommended) or pip
+- **Version Control**: git
+
+<Info>
+  pyrig uses modern Python features including PEP 695 type parameters and PEP 692 Unpack. Python 3.12+ is required.
+</Info>
+
+## Project Status
+
+<CardGroup cols={3}>
+  <Card>
+    **Version**: 10.2.3
+  </Card>
+  <Card>
+    **Status**: Production/Stable
+  </Card>
+  <Card>
+    **License**: MIT
+  </Card>
+</CardGroup>
+
+pyrig is actively maintained and used in production. The API is stable with semantic versioning.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Install pyrig" icon="download" href="/quickstart">
+    Follow the quickstart guide to get pyrig running in your project
+  </Card>
+  <Card title="Learn the Architecture" icon="book" href="/architecture">
+    Understand how pyrig's config system, CLI, and inheritance work
+  </Card>
+</CardGroup>

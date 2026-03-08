@@ -1,0 +1,328 @@
+---
+title: pyrig build
+description: Build all distributable artifacts for the project
+---
+
+## Overview
+
+The `build` command discovers and invokes all `BuilderConfigFile` subclasses across the project and its dependencies to create distributable artifacts such as PyInstaller executables, documentation archives, and custom build processes.
+
+```bash
+uv run pyrig build
+```
+
+## What It Does
+
+The command executes a comprehensive build process:
+
+<Steps>
+  <Step title="Discover builders">
+    Finds all non-abstract `BuilderConfigFile` subclasses across the project and dependencies.
+  </Step>
+  
+  <Step title="Validate builders">
+    Validates each builder, which triggers the build process via `dump()`.
+  </Step>
+  
+  <Step title="Create artifacts">
+    Builds artifacts in temporary directories according to each builder's configuration.
+  </Step>
+  
+  <Step title="Add platform suffixes">
+    Renames artifacts with platform-specific suffixes (e.g., `-Linux`, `-Windows`, `-Darwin`).
+  </Step>
+  
+  <Step title="Move to dist/">
+    Moves all artifacts to the `dist/` directory for distribution.
+  </Step>
+</Steps>
+
+## Usage
+
+### Basic Usage
+
+```bash
+uv run pyrig build
+```
+
+### With Verbose Output
+
+```bash
+# See build progress
+uv run pyrig -v build
+
+# See detailed builder discovery and execution
+uv run pyrig -vv build
+
+# See full diagnostic output
+uv run pyrig -vvv build
+```
+
+### Quiet Mode
+
+```bash
+# Only show warnings and errors
+uv run pyrig -q build
+```
+
+## Expected Output
+
+```bash
+$ uv run pyrig build
+Discovering builders...
+Found 2 builders
+Building PyInstaller executable...
+Building documentation archive...
+✓ Created 2 artifacts in dist/
+```
+
+```bash
+$ uv run pyrig -v build
+DEBUG: Discovered 2 BuilderConfigFile subclasses
+INFO: Building with PyInstallerBuilder (priority: 100)
+DEBUG: Creating temporary build directory
+INFO: Running PyInstaller...
+INFO: Renaming to myproject-Linux
+INFO: Moving to dist/myproject-Linux
+INFO: Building with DocsBuilder (priority: 50)
+INFO: Creating docs archive
+INFO: Moving to dist/docs.tar.gz
+✓ Created 2 artifacts in dist/
+```
+
+## Generated Artifacts
+
+After running `build`, your `dist/` directory contains:
+
+```bash
+dist/
+├── myproject-Linux          # PyInstaller executable (Linux)
+├── myproject-Windows.exe    # PyInstaller executable (Windows)
+├── myproject-Darwin         # PyInstaller executable (macOS)
+└── docs.tar.gz              # Documentation archive
+```
+
+<Note>
+  Platform-specific suffixes are automatically added based on `platform.system()` output.
+</Note>
+
+## Build Process
+
+### Discovery
+
+The command discovers builders across the entire dependency chain:
+
+```
+pyrig (base builders)
+└── your-base-package (organizational builders)
+    └── your-project (project-specific builders)
+```
+
+### Priority Groups
+
+Builders are organized by priority:
+
+<ParamField path="Priority" type="number">
+  Higher priority builders execute first. Builders within the same priority group execute in parallel.
+  
+  ```python
+  class PyInstallerBuilder(BuilderConfigFile):
+      priority = 100  # High priority
+  
+  class DocsBuilder(BuilderConfigFile):
+      priority = 50   # Lower priority
+  ```
+</ParamField>
+
+### Parallel Execution
+
+- **Within priority groups**: Builders execute in parallel
+- **Across priority groups**: Executed sequentially (highest first)
+
+```
+Priority 100: [PyInstaller] [CustomBuilder]  ← Parallel
+     ↓
+Priority 50:  [DocsBuilder]                  ← Sequential
+     ↓
+Priority 10:  [ArchiveBuilder] [Uploader]    ← Parallel
+```
+
+## Platform-Specific Naming
+
+Artifacts are automatically renamed with platform suffixes:
+
+| Platform | `platform.system()` | Suffix | Example |
+|----------|---------------------|--------|----------|
+| Linux | `'Linux'` | `-Linux` | `myproject-Linux` |
+| Windows | `'Windows'` | `-Windows` | `myproject-Windows.exe` |
+| macOS | `'Darwin'` | `-Darwin` | `myproject-Darwin` |
+
+## Creating Custom Builders
+
+Define a custom builder by subclassing `BuilderConfigFile`:
+
+```python
+# myproject/rig/builders/custom.py
+from pathlib import Path
+from pyrig.rig.builders.base.base import BuilderConfigFile
+
+class CustomBuilder(BuilderConfigFile):
+    """Build a custom artifact."""
+    
+    priority = 75  # Execution priority
+    
+    @classmethod
+    def path(cls) -> Path:
+        """Temporary build directory."""
+        return Path('build/custom')
+    
+    @classmethod
+    def build(cls) -> Path:
+        """Build and return artifact path."""
+        # Your build logic here
+        artifact = cls.path() / 'custom-artifact'
+        artifact.write_text('custom content')
+        return artifact
+    
+    @classmethod
+    def artifact_name(cls) -> str:
+        """Base name for the artifact."""
+        return 'custom-artifact'
+```
+
+Then run:
+
+```bash
+uv run pyrig build
+# Creates dist/custom-artifact-Linux
+```
+
+## PyInstaller Integration
+
+pyrig includes built-in PyInstaller support:
+
+```python
+from pyrig.rig.builders.pyinstaller import PyInstallerBuilder
+
+class MyAppBuilder(PyInstallerBuilder):
+    """Build executable for my application."""
+    
+    @classmethod
+    def entry_point(cls) -> str:
+        return 'myproject.main:main'
+    
+    @classmethod
+    def artifact_name(cls) -> str:
+        return 'myapp'
+```
+
+```bash
+uv run pyrig build
+# Creates dist/myapp-Linux
+```
+
+## Behavior
+
+<ParamField path="Discovery" type="automatic">
+  Automatically finds all non-abstract `BuilderConfigFile` subclasses across dependencies.
+</ParamField>
+
+<ParamField path="Validation" type="triggered">
+  Validation triggers the build process via each builder's `dump()` method.
+</ParamField>
+
+<ParamField path="Isolation" type="temporary-dirs">
+  Each builder uses a temporary directory for isolation during builds.
+</ParamField>
+
+<ParamField path="Distribution" type="dist-directory">
+  All artifacts are moved to `dist/` after successful builds.
+</ParamField>
+
+<ParamField path="Abstract Classes" type="excluded">
+  Only non-abstract `BuilderConfigFile` subclasses are executed.
+</ParamField>
+
+## When to Use
+
+### Use `build` When:
+
+- Creating distributable executables
+- Preparing artifacts for release
+- Building documentation archives
+- Creating platform-specific builds
+- Packaging for deployment
+
+### Example Workflow
+
+<Steps>
+  <Step title="Define builders">
+    Create `BuilderConfigFile` subclasses for your artifacts.
+  </Step>
+  
+  <Step title="Run build">
+    ```bash
+    uv run pyrig build
+    ```
+  </Step>
+  
+  <Step title="Verify artifacts">
+    ```bash
+    ls dist/
+    ```
+  </Step>
+  
+  <Step title="Test artifacts">
+    ```bash
+    ./dist/myproject-Linux --help
+    ```
+  </Step>
+  
+  <Step title="Distribute">
+    Upload artifacts to GitHub releases, package registries, etc.
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+### Build Failures
+
+If a builder fails:
+
+1. Run with verbose output: `uv run pyrig -vv build`
+2. Check the builder's logs
+3. Verify dependencies are installed
+4. Check temporary build directories
+
+### Missing Artifacts
+
+If artifacts aren't created:
+
+- Verify builder classes are non-abstract
+- Check that builders are discovered (use `-v`)
+- Ensure `build()` method returns a valid path
+
+### Platform Issues
+
+For platform-specific builds:
+
+- Run builds on each target platform
+- Use CI/CD for multi-platform builds
+- Check platform detection: `python -c "import platform; print(platform.system())"`
+
+<Warning>
+  The `dist/` directory is typically git-ignored. Ensure artifacts are uploaded to releases or package registries before distribution.
+</Warning>
+
+## Related Commands
+
+- **[mkroot](/cli/commands/mkroot)** - Generate configuration files (may include builder configs)
+- **[protect-repo](/cli/commands/protect-repo)** - Configure repository for releases
+
+## Implementation
+
+The `build` command calls `BuilderConfigFile.validate_all_subclasses()`, which discovers and validates all builder subclasses. Each builder's validation triggers its build process. See `pyrig/rig/cli/commands/build_artifacts.py:10`.
+
+<Note>
+  Run `uv run pyrig build --help` to see the command's built-in help text.
+</Note>
