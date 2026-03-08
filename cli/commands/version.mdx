@@ -1,0 +1,89 @@
+---
+title: version
+description: Display the current project's version
+---
+
+The `version` command retrieves and displays the version of the project being run from installed package metadata. This is a shared command available across all pyrig-based projects.
+
+## Usage
+
+```bash
+uv run pyrig version
+uv run <project-name> version
+```
+
+## Description
+
+The `version` command automatically determines the project name from the command invocation and displays its version. This means the same command works in pyrig itself and in any project that depends on pyrig.
+
+<Note>
+  The package must be installed (even in editable mode with `uv pip install -e .`) for version retrieval to work.
+</Note>
+
+## Examples
+
+### Display pyrig's Version
+
+```bash
+uv run pyrig version
+```
+
+**Output:**
+```
+pyrig version 10.2.3
+```
+
+### Display Your Project's Version
+
+If you have a project called `myproject` that uses pyrig:
+
+```bash
+uv run myproject version
+```
+
+**Output:**
+```
+myproject version 1.2.3
+```
+
+## How It Works
+
+The `version` command:
+
+1. Extracts the project name from `sys.argv[0]`
+2. Uses `importlib.metadata.version()` to retrieve the version
+3. Displays the formatted output: `{project_name} version {version}`
+
+This automatic project detection means you don't need to customize the command for each project — it adapts to the context it's run in.
+
+## Implementation Reference
+
+The `version` command is defined in `pyrig/rig/cli/shared_subcommands.py:15`.
+
+```python
+def version() -> None:
+    """Display the current project's version."""
+    project_name = project_name_from_argv()
+    typer.echo(f"{project_name} version {_version(project_name)}")
+```
+
+## Shared Commands
+
+The `version` command is a **shared command**, meaning:
+
+- It's defined in `shared_subcommands.py` rather than `subcommands.py`
+- It's automatically available in all dependent projects
+- It adapts to each project's context (shows the correct project name and version)
+
+This is part of pyrig's multi-package inheritance system that allows commands to propagate across the dependency chain.
+
+## Related Commands
+
+<CardGroup cols={2}>
+  <Card title="CLI Overview" icon="terminal" href="/cli/overview">
+    Complete CLI reference and command categories
+  </Card>
+  <Card title="CLI System" icon="code" href="/concepts/cli-system">
+    Learn about command discovery and shared commands
+  </Card>
+</CardGroup>

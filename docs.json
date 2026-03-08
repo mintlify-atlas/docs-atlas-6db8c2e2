@@ -52,7 +52,8 @@
               "cli/commands/build",
               "cli/commands/protect-repo",
               "cli/commands/scratch",
-              "cli/commands/rmpyc"
+              "cli/commands/rmpyc",
+              "cli/commands/version"
             ]
           },
           {

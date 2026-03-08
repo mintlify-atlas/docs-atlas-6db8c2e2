@@ -16,6 +16,7 @@ uv run pyrig build          # Build artifacts (PyInstaller, etc.)
 uv run pyrig protect-repo   # Configure repository protection
 uv run pyrig scratch        # Execute the project's .scratch file
 uv run pyrig rmpyc          # Remove __pycache__ directories
+uv run pyrig version        # Display project version
 ```
 
 ## Global Options
@@ -70,6 +71,10 @@ All pyrig commands support verbosity control through global flags:
 
 - **[build](/cli/commands/build)** - Build distributable artifacts
 - **[protect-repo](/cli/commands/protect-repo)** - Configure GitHub security
+
+### Utility Commands
+
+- **[version](/cli/commands/version)** - Display project version
 
 ## Usage Patterns
 
