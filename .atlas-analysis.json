@@ -1,0 +1,136 @@
+{
+  "projectType": "framework",
+  "projectName": "pyrig",
+  "projectDescription": "A Python toolkit that rigs up projects by standardizing and automating project setup, configuration, and maintenance",
+  "theme": "aspen",
+  "primaryColor": "#94cb04",
+  "lightColor": "#545454",
+  "darkColor": null,
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "architecture"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/config-system",
+              "concepts/cli-system",
+              "concepts/multi-package-inheritance",
+              "concepts/resources"
+            ]
+          },
+          {
+            "group": "CLI Reference",
+            "pages": [
+              "cli/overview",
+              "cli/commands/init",
+              "cli/commands/mkroot",
+              "cli/commands/mktests",
+              "cli/commands/mkinits",
+              "cli/commands/build",
+              "cli/commands/protect-repo",
+              "cli/commands/scratch",
+              "cli/commands/rmpyc"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configs/overview",
+              "configs/pyproject",
+              "configs/github-workflows",
+              "configs/branch-protection",
+              "configs/custom-configs"
+            ]
+          },
+          {
+            "group": "Tools",
+            "pages": [
+              "tools/overview",
+              "tools/package-manager",
+              "tools/version-controller",
+              "tools/linter",
+              "tools/type-checker",
+              "tools/project-tester"
+            ]
+          },
+          {
+            "group": "Builders",
+            "pages": [
+              "builders/overview",
+              "builders/pyinstaller",
+              "builders/custom-builders"
+            ]
+          },
+          {
+            "group": "Testing",
+            "pages": [
+              "testing/structure",
+              "testing/autouse-fixtures",
+              "testing/best-practices"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/extending-pyrig",
+              "guides/creating-custom-tools",
+              "guides/packaging"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "API",
+            "pages": [
+              "api/overview",
+              "api/cli",
+              "api/configs",
+              "api/tools",
+              "api/builders"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Idempotent project scaffolding with single-command initialization",
+    "Extensible config file system with automatic validation and merging",
+    "Automatic CLI with dynamic command discovery",
+    "Multi-package inheritance pattern for customization",
+    "Type-safe tool wrappers for uv, git, ruff, pytest, and more",
+    "PyInstaller integration and extensible build system",
+    "Automated test generation and infrastructure",
+    "CI/CD workflow generation and repository automation"
+  ],
+  "publicApiSurface": [
+    "pyrig init",
+    "pyrig mkroot",
+    "pyrig mktests",
+    "pyrig mkinits",
+    "pyrig build",
+    "pyrig protect-repo",
+    "pyrig scratch",
+    "pyrig rmpyc",
+    "ConfigFile",
+    "BuilderConfigFile",
+    "Tool",
+    "PackageManager",
+    "VersionController",
+    "Linter",
+    "ProjectTester"
+  ]
+}
